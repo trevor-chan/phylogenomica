@@ -1,0 +1,66 @@
+# Repository guidance
+
+## Project objective
+
+Build a reproducible phylogeny game in which the player reconstructs the path
+to a hidden target species. Phylogenetic correctness takes precedence over
+presentation convenience.
+
+## Read before changing behavior
+
+- `docs/game_design.md` contains gameplay rules and invariants.
+- `docs/data_sources.md` contains source, licensing, and data-lifecycle policy.
+- `docs/architecture.md` contains model and module boundaries.
+- `docs/roadmap.md` contains sequencing and unresolved decisions.
+
+When implementation evidence conflicts with a planning assumption, preserve
+the evidence in an audit result and update the relevant document rather than
+silently encoding a new rule.
+
+## Package boundaries
+
+- `phylogenomica.data`: source ingestion, normalization, validation, and audit.
+- `phylogenomica.tree`: topology reconstruction and tree algorithms.
+- `phylogenomica.generation`: target eligibility and deterministic game/stage
+  generation.
+- `phylogenomica.gameplay`: UI-independent guess, reveal, score, and game state.
+
+Keep scripts thin: reusable logic belongs under `src/phylogenomica/`. Keep the
+game engine independent of any future frontend.
+
+## Data policy
+
+- Never edit files in `data/raw/`; replace them only with a newly documented
+  upstream snapshot.
+- Do not commit raw dumps, rebuildable intermediates, caches, or unreviewed
+  downloaded media.
+- Commit only compact gameplay-ready data under `data/gameplay/` and curated
+  runtime media under `assets/gameplay/`.
+- Every committed data or media artifact must have provenance, source-version,
+  license, attribution, checksum, and build information in its manifest.
+- A clean clone must eventually run with the committed gameplay bundle, while
+  maintainers can reproduce that bundle from tracked scripts plus documented
+  upstream inputs.
+
+## Correctness requirements
+
+- Reconstruct biological topology from OneZoom's `real_parent`, not artificial
+  display bifurcations.
+- Collapse monotypic chains and preserve genuine polytomies.
+- Accept every candidate in the deepest visible tier as correct.
+- Never reveal or eliminate a candidate that could be closer to the target.
+- Never include the hidden target among candidates.
+- Make generation deterministic for a dataset version, generator version,
+  target, configuration, and seed.
+
+Add tests for topology, ordering, polytomies, target hiding, duplicates,
+continuity, reveal behavior, and determinism as those components are built.
+
+## Local checks
+
+Run before handing off Python changes:
+
+```bash
+ruff check .
+pytest
+```

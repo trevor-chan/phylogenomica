@@ -1,0 +1,33 @@
+# Python bytecode and environments
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Build and test output
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+
+# Local upstream and rebuildable data. Keep the policy files in Git.
+/data/raw/*
+!/data/raw/README.md
+/data/processed/*
+!/data/processed/README.md
+/data/cache/*
+!/data/cache/README.md
+
+# Original and working media are local; curated gameplay assets are tracked.
+/assets/raw/*
+!/assets/raw/README.md
+/assets/processed/*
+!/assets/processed/README.md
