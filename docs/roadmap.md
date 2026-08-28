@@ -29,9 +29,15 @@ The placeholder scripts intentionally contain no fabricated schema logic.
 
 ## Phase 1 — Source acquisition and ingestion
 
-- Verify the official OneZoom dump mechanism, version, license, and attribution.
-- Preserve one immutable raw snapshot and its checksum locally.
-- Inspect node, leaf, topology, image, name, age, and external-ID fields.
+Status: in progress. Static topology acquisition and its initial structural
+audit are complete for tree version `29194525`; the production SQL dump has not
+yet been obtained.
+
+- ~~Verify the official static-data mechanism and license references.~~
+- ~~Preserve one immutable static snapshot and its checksums locally.~~
+- ~~Inspect the current source definitions for relevant database tables.~~
+- Request the current public production SQL dump and its specific reuse terms.
+- Inspect actual node, leaf, image, name, age, and external-ID values.
 - Implement versioned schema parsing and normalized output.
 - Fail clearly on unknown source schema or mismatched input checksums.
 
@@ -50,6 +56,7 @@ Deliverable: a heavily unit-tested derived tree representation.
 
 ## Phase 3 — Dataset audit
 
+- ~~Implement the topology-only structural audit available from static data.~~
 - Produce structural and metadata coverage reports.
 - Calculate lineage depth and candidate capacity distributions.
 - Estimate the fraction of targets supporting `N=10`, `M=5`.

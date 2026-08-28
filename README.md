@@ -56,8 +56,15 @@ Phylogenomica targets Python 3.11 or newer.
 
 ```bash
 python -m pip install -e '.[dev]'
+phylogenomica-download-onezoom
+phylogenomica-audit --output data/processed/audits/onezoom.json
 pytest
 ```
+
+The downloader discovers and pins OneZoom's current static tree version, then
+stores its topology, viewer index, divergence dates, checksums, and local source
+manifest under ignored `data/raw/onezoom/`. Full taxon metadata requires a
+separately requested public OneZoom SQL dump; see the data-source documentation.
 
 The project is licensed under the [MIT License](LICENSE). Source datasets and
 media retain their own licenses and attribution requirements.

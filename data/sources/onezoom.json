@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "source": "OneZoom",
+  "homepage": "https://www.onezoom.org/",
+  "developer_page": "https://www.onezoom.org/developer",
+  "discovery_url": "https://www.onezoom.org/life.html",
+  "static_data_url_template": "https://www.onezoom.org/OZtree/static/FinalOutputs/data/{name}_{tree_version}.js.gz",
+  "source_repository": "https://github.com/OneZoom/OZtree",
+  "license_url": "https://www.onezoom.org/OZtree/static/downloads/OneZoom_License_V1.pdf",
+  "license_faq_url": "https://www.onezoom.org/OZtree/static/downloads/OneZoom_License_V1_FAQ.pdf",
+  "data_sources_url": "https://www.onezoom.org/data_sources.html",
+  "redistribution_status": "review-required",
+  "notes": [
+    "Static viewer files provide topology and divergence dates, not complete taxon metadata.",
+    "OneZoom directs projects needing the full public database to request a production SQL dump.",
+    "Do not promote source or derived data into the tracked gameplay bundle until redistribution terms are reviewed."
+  ]
+}

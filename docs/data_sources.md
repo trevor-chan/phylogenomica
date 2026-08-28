@@ -2,11 +2,16 @@
 
 ## Status
 
-OneZoom is the planned operational source for the initial game database. The
-download mechanism, current dump schema, coverage, size, license, and required
-attribution still need to be verified against an actual snapshot. This document
-therefore separates design intent from facts that the first data audit must
-establish.
+OneZoom is the operational source for the initial game database. On 2026-08-28,
+the project acquired and audited the live viewer's versioned static tree
+snapshot `29194525`. It contains the complete compact topology, viewer cut map,
+and sparse divergence dates. See the
+[snapshot audit](audits/onezoom_29194525.md) for checksums and findings.
+
+The static files do not contain the complete taxon metadata required by the
+game. OneZoom's current developer guidance directs downstream projects to
+request a public production SQL dump. Obtaining that dump and confirming its
+license and attribution terms are the remaining source-acquisition gate.
 
 The project should not commit an upstream database merely because it is
 downloadable. Redistribution of any derived gameplay bundle must be reviewed
@@ -28,8 +33,11 @@ OneZoom is expected to provide a largely integrated working snapshot with:
 - divergence-age estimates on some internal nodes;
 - popularity or related signals useful for representative selection.
 
-The actual schema is authoritative. Ingestion code must not be designed around
-these assumed field names until a versioned dump has been inspected.
+The current source schema confirms `ordered_leaves`, `ordered_nodes`,
+`vernacular_by_ott`, `vernacular_by_name`, `images_by_ott`, and
+`images_by_name` as the relevant tables. The SQL dump remains authoritative for
+the exact exported columns and values, so ingestion must still validate its
+schema before loading data.
 
 OneZoom may contain display-oriented artificial bifurcations. Gameplay topology
 must be reconstructed from the biological parent represented by `real_parent`
@@ -156,13 +164,32 @@ on local state.
 
 The first data milestone is intentionally investigative:
 
-1. identify the official dump distribution and license;
-2. download one versioned snapshot into `data/raw/`;
-3. inspect its real schema and value conventions;
-4. implement a minimal normalized ingestion path;
-5. reconstruct biological topology from the verified parent field;
-6. run structural, metadata, and target-viability audits;
-7. revise assumptions before implementing full generation.
+1. ~~Identify the official static distribution and source documentation.~~
+2. ~~Download and checksum one versioned topology snapshot in `data/raw/`.~~
+3. ~~Implement a first structural audit that collapses display polytomies.~~
+4. Request and obtain the public production SQL dump from OneZoom.
+5. Validate the dump's schema and value conventions.
+6. Implement normalized ingestion and reconcile SQL IDs with static topology.
+7. Run metadata and target-viability audits.
+8. Revise assumptions before implementing full generation.
+
+### Production dump request
+
+The dump request should go to `mail@onezoom.org` and include:
+
+- that Phylogenomica is an open-source educational phylogeny game;
+- a request for the current public production SQL dump without sponsorship,
+  reservation, personal, or IUCN-restricted data;
+- a request for the snapshot/version date and a supplied checksum;
+- confirmation of the dump and derived-data license and required attribution;
+- explicit clarification on whether a compact, processed, gameplay-only
+  derivative may be redistributed in the public Git repository;
+- a request for any current schema or import notes relevant to
+  `ordered_nodes`, `ordered_leaves`, vernacular names, and image metadata.
+
+Do not place a provided download URL, credential, or private correspondence in
+Git. Store the dump itself under ignored `data/raw/onezoom/<version>/` and add
+its non-sensitive provenance and checksum to the local raw manifest.
 
 ### Structural audit
 

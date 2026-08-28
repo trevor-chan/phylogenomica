@@ -12,6 +12,10 @@ license = { file = "LICENSE" }
 authors = [{ name = "Phylogenomica contributors" }]
 dependencies = []
 
+[project.scripts]
+phylogenomica-download-onezoom = "phylogenomica.data.onezoom_download:main"
+phylogenomica-audit = "phylogenomica.data.audit:main"
+
 [project.optional-dependencies]
 dev = [
   "pytest>=8",
