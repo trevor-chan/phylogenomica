@@ -180,11 +180,12 @@ the full artifact; they are diagnostics rather than an eligibility decision.
 
 ## Batch target-feasibility result
 
-Feasibility audit version 2 evaluates the playable-lineage definition rather
+Feasibility audit version 4 evaluates the playable-lineage definition rather
 than requiring a closest-sister endpoint. For `M=5` and `N=10`, a lineage has
-49 unique relative species and one target. Each of four transition stages has
-eight decoys on shallower selected tiers and two unlock species on deeper
-selected tiers. The ultimate stage reserves nine relatives and the target.
+49 unique relative species and one target. Each of the first four stages has
+eight decoys, one deeper mulligan, and one deepest unlock. The ultimate stage
+has eight decoys, one deepest selected-relative mulligan, and the target as a
+normal visible, selectable card. Clicking the target ends the game.
 
 The rich-card pass restricts both targets and relatives to leaves with a
 scientific name, preferred English name, and `overall_best_any` image whose
@@ -194,10 +195,9 @@ restricted universe.
 | Measure | Result |
 |---|---:|
 | Rich-card species considered as targets | 44,361 |
-| Targets supporting the full playable lineage | 43,381 (97.7909%) |
+| Targets supporting the full playable lineage | 43,032 (97.0041%) |
 | Failure: insufficient total relatives | 0 (0.0000%) |
-| Failure: fewer than 4 ordered decoy/unlock transitions | 545 (1.2286%) |
-| Failure: fewer than 9 relatives after 4 transitions | 435 (0.9806%) |
+| Failure: insufficient ordered stage-role structure | 1,329 (2.9959%) |
 | Total rich-card relatives available to every target | 44,360 |
 | Median usable rich-card tiers | 39 |
 | Median rich-card capacity per target-tier instance | 27 |
@@ -207,21 +207,29 @@ from the target at exactly one backbone event when the game root is the root of
 life. The only failures are therefore distribution failures: the valid species
 cannot be arranged into the requested ordered role shape. No literal closest
 sister tier is required, and source tiers or excess species may remain
-unselected.
+unselected. Mulligan and unlock roles must occupy distinct tiers in transition
+stages so a source polytomy is never split arbitrarily across the two outcomes.
+In the ultimate stage, only the selected-relative mulligan requires its own
+tier; the target is the endpoint rather than an off-target tier representative.
 
 The ignored detailed result is generated with:
 
 ```bash
 phylogenomica-audit-targets data/processed/onezoom/27400288 \
   --require-rich-cards \
-  --output data/processed/onezoom/27400288/target-feasibility-v2/rich-cards.json
+  --output data/processed/onezoom/27400288/target-feasibility-v4/rich-cards.json
 ```
 
-### Superseded conservative model
+### Superseded models
 
 Audit version 1 required the ultimate stage to reach the literal closest
 sister event and initially required two presentable terminal representatives.
 It retained 20,399 rich-card targets; lowering the terminal minimum to one
 retained 33,013. Those results demonstrated that closest-sister capacity, not
-overall topology, caused most exclusions. They motivated version 2 and are
-preserved here as decision evidence, not current eligibility counts.
+overall topology, caused most exclusions. Version 2 removed that endpoint and
+used two unlock species in each transition stage, retaining 43,381 targets.
+Version 3 replaces the second unlock with a non-advancing, score-neutral
+mulligan and applies the same ordered role pattern to the ultimate stage,
+retaining 42,933 targets. Version 4 treats the target as the final stage-ending
+card and removes the unnecessary ultimate-stage unlock. These earlier results
+are preserved as decision evidence, not current eligibility counts.

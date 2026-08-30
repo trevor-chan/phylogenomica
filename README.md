@@ -1,10 +1,10 @@
 # Phylogenomica
 
 Phylogenomica is a phylogeny trivia and deduction game about reconstructing the
-evolutionary path to a hidden species. In each stage, the player searches for
-one of two deeper unlock species. Every guess reveals part of one persistent
+evolutionary path to an initially concealed species. In each stage, the player searches for
+the closest selected relative. Every guess reveals part of one persistent
 cladogram, and a game progressively narrows from broad branches of life toward
-the hidden target.
+the target, which becomes a normal selectable card in the ultimate stage.
 
 The project is currently in its data-pipeline and game-engine design phase. It
 is not playable yet. The first implementation goal is to validate the game
@@ -119,12 +119,14 @@ Audit every leaf against a configurable game shape:
 
 ```bash
 phylogenomica-audit-targets data/processed/onezoom/27400288 \
-  --output data/processed/onezoom/27400288/target-feasibility-v2/audit.json
+  --output data/processed/onezoom/27400288/target-feasibility-v4/audit.json
 ```
 
-Audit version 2 constructs a playable lineage of `M * N` members: one target,
-`M * N - 1` unique relatives, and two deeper unlock species in every
-non-ultimate stage. It does not require a literal closest-sister endpoint.
+Audit version 4 constructs a playable lineage of `M * N` members: one target
+and `M * N - 1` unique relatives. Transition stages have decoys, one deeper
+mulligan, and one deepest unlock on distinct tiers. The ultimate stage has
+decoys, one deepest selected-relative mulligan, and the visible selectable
+target. It does not require a literal closest-sister endpoint.
 
 To require every target and relative card to have both a preferred English
 name and a complete licensed best-image record, add `--require-rich-cards`:
@@ -132,10 +134,10 @@ name and a complete licensed best-image record, add `--require-rich-cards`:
 ```bash
 phylogenomica-audit-targets data/processed/onezoom/27400288 \
   --require-rich-cards \
-  --output data/processed/onezoom/27400288/target-feasibility-v2/rich-cards.json
+  --output data/processed/onezoom/27400288/target-feasibility-v4/rich-cards.json
 ```
 
-This audit retains 43,381 of 44,361 fully card-ready target species. The result
+This audit retains 43,032 of 44,361 fully card-ready target species. The result
 remains an ignored, reproducible artifact; reviewed findings are recorded in
 the [Docker snapshot audit](docs/audits/onezoom_docker_27400288.md).
 

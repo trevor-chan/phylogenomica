@@ -3,7 +3,7 @@
 ## Project objective
 
 Build a reproducible phylogeny game in which the player reconstructs the path
-to a hidden target species. Phylogenetic correctness takes precedence over
+to an initially concealed target species. Phylogenetic correctness takes precedence over
 presentation convenience.
 
 ## Read before changing behavior
@@ -48,17 +48,21 @@ game engine independent of any future frontend.
   display bifurcations.
 - Collapse monotypic chains and preserve genuine polytomies.
 - Assign every selected relative to its correct target-backbone tier.
-- In each non-ultimate stage, make exactly the configured unlock count deeper
-  than every decoy; never mix unlock and decoy roles within a selected tier.
+- In every transition stage, place one mulligan on a distinct tier deeper than
+  every decoy and one unlock on a distinct tier deeper than the mulligan; never
+  mix relative roles within a selected tier.
+- In the ultimate stage, place one mulligan deeper than every decoy and include
+  the target as a normal selectable card; clicking it ends the game.
 - Do not require any stage to end at the literal closest-sister event.
 - Never reveal or eliminate a relative that could be deeper than the guess.
-- Never include the hidden target among relative cards.
+- Exclude the target from transition-stage cards and include it exactly once in
+  the ultimate stage.
 - Make generation deterministic for a dataset version, generator version,
   target, configuration, and seed.
 
-Add tests for topology, ordering, polytomies, role separation, target hiding,
-duplicates, continuity, reveal behavior, and determinism as those components
-are built.
+Add tests for topology, ordering, polytomies, role separation, mulligan scoring,
+target visibility, duplicates, continuity, reveal behavior, and determinism as
+those components are built.
 
 ## Local checks
 

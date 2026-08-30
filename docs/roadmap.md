@@ -38,27 +38,27 @@ monotypic biological nodes, although the generic collapse behavior is tested.
 The full normalized and derived databases remain ignored, reproducible
 intermediates rather than the eventual gameplay bundle.
 
-Feasibility audit version 2 replaces the earlier conservative closest-sister
-model with the playable-lineage definition. A default lineage contains 50
-species: 49 unique relatives and one target. Each of four transition stages
-contains eight decoys followed by two deeper unlock species; the ultimate stage
-reserves nine relatives and the target. Tiers and excess species may be skipped,
-and no stage must end at a literal closest-sister event.
+Feasibility audit version 4 uses the playable-lineage definition. A default
+lineage contains 50 species: 49 unique relatives and one target. Each of the
+first four stages contains eight decoys, one deeper mulligan, and one deepest
+unlock. The ultimate stage contains eight decoys, one deepest selected-relative
+mulligan, and the visible selectable target. Tiers and excess species may be
+skipped, and no stage must end at a literal closest-sister event.
 
 Of 44,361 species with a preferred English name and complete best-image record,
-43,381 (97.7909%) support this full ordered stage shape. Every target has 44,360
-total rich-card relatives, so none fail raw capacity. Only 545 fail to construct
-all four ordered decoy/unlock transitions, and 435 complete those transitions
-without leaving nine deeper relatives for the ultimate stage. The initial
+43,032 (97.0041%) support this full ordered stage shape. Every target has 44,360
+total rich-card relatives, so none fail raw capacity. The remaining 1,329 fail
+only because their relative-bearing tiers cannot supply the requested ordered
+transition stages plus the ultimate decoy/mulligan structure. The initial
 `M=5`, `N=10` shape is therefore retained for generator testing.
 
-The earlier version-1 results remain in the snapshot audit as evidence of why
-closest-sister terminal requirements were removed. They are not current target
-eligibility counts.
+Earlier audit versions remain in the snapshot audit as evidence for removing
+closest-sister terminal requirements and refining the stage roles. They are not
+current target eligibility counts.
 
 The next implementation sequence is:
 
-1. persist the version-2 target-eligibility index and reason codes;
+1. persist the version-4 target-eligibility index and reason codes;
 2. implement deterministic relative selection using topology first and
    documented metadata-quality preferences second;
 3. assemble and validate immutable seeded games;
@@ -222,8 +222,9 @@ enough to ingest, and source/asset terms permit the intended use.
 
 ### After audit
 
-Decide whether `N=10`, `M=5`, two unlock species per transition, and the
-planned relative-quality preferences work for a sufficiently broad target set.
+Decide whether `N=10`, `M=5`, one mulligan in every stage, one unlock in each
+transition stage, and the planned relative-quality preferences work for a
+sufficiently broad target set.
 
 ### Before committing gameplay data
 

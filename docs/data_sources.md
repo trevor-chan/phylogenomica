@@ -238,11 +238,11 @@ Measure usable lineage depth, relative capacity, ordered decoy/unlock stage
 structure, and the fraction of leaves able to support the initial `N=10`,
 `M=5` playable lineage.
 
-Feasibility audit version 2 has completed this measurement for every rich-card
+Feasibility audit version 4 has completed this measurement for every rich-card
 leaf in the historical development snapshot. Of 44,361 leaves with a preferred
-English name and complete licensed best-image record, 43,381 support a lineage
+English name and complete licensed best-image record, 43,032 support a lineage
 of 49 unique relatives and one target. No target fails total relative capacity;
-980 fail only the ordered stage-role shape. See the
+1,329 fail only the ordered transition-stage and ultimate-stage role shape. See the
 [Docker snapshot audit](audits/onezoom_docker_27400288.md) for the full
 interpretation and the superseded conservative results.
 

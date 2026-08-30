@@ -20,20 +20,21 @@ def test_validates_feasibility_configuration() -> None:
 
     assert config.lineage_species == 50
     assert config.relative_species == 49
-    assert config.transition_stages == 4
     assert config.decoys_per_transition_stage == 8
-    assert config.final_stage_relatives == 9
+    assert config.decoys_in_ultimate_stage == 8
+    assert config.total_unlock_species == 4
+    assert config.total_mulligan_species == 5
+    assert config.total_decoy_species == 40
     with pytest.raises(ValueError, match="positive"):
         FeasibilityConfig(members_per_stage=0)
-    with pytest.raises(ValueError, match="cannot exceed"):
-        FeasibilityConfig(members_per_stage=2, unlock_species_per_transition=3)
+    with pytest.raises(ValueError, match="exceed"):
+        FeasibilityConfig(members_per_stage=1)
 
 
-def test_assigns_decoys_and_unlocks_on_separate_ordered_tiers() -> None:
+def test_assigns_decoys_mulligan_and_unlock_to_separate_tiers() -> None:
     config = FeasibilityConfig(
         members_per_stage=4,
         stages_per_game=2,
-        unlock_species_per_transition=2,
     )
     state = _LineageState(0, 0, 0, 0, 0)
     state = _advance_lineage(state, tier_capacity=10, config=config)
@@ -45,6 +46,11 @@ def test_assigns_decoys_and_unlocks_on_separate_ordered_tiers() -> None:
     state = _advance_lineage(state, tier_capacity=5, config=config)
     assert state == _LineageState(3, 1, 0, 0, 0)
 
+    state = _advance_lineage(state, tier_capacity=10, config=config)
+    assert state == _LineageState(4, 1, 2, 0, 0)
+    state = _advance_lineage(state, tier_capacity=1, config=config)
+    assert state == _LineageState(5, 2, 0, 0, 0)
+
 
 def test_final_stage_can_end_before_the_literal_closest_tier() -> None:
     config = FeasibilityConfig(
@@ -54,6 +60,7 @@ def test_final_stage_can_end_before_the_literal_closest_tier() -> None:
     state = _advance_lineage(
         _LineageState(0, 0, 0, 0, 0), tier_capacity=3, config=config
     )
+    state = _advance_lineage(state, tier_capacity=1, config=config)
 
     metrics = _target_metrics(
         state,
@@ -63,7 +70,7 @@ def test_final_stage_can_end_before_the_literal_closest_tier() -> None:
     )
 
     assert metrics.supports(config)
-    assert metrics.final_stage_relative_capacity == 3
+    assert metrics.completed_stages == 1
 
 
 def test_total_capacity_alone_does_not_create_ordered_stages() -> None:
@@ -188,9 +195,8 @@ def test_audits_every_target_in_batch(tmp_path: Path) -> None:
         tree_database=tree,
         normalized_database=normalized,
         config=FeasibilityConfig(
-            members_per_stage=2,
-            stages_per_game=2,
-            unlock_species_per_transition=2,
+            members_per_stage=3,
+            stages_per_game=1,
         ),
     )
 
@@ -200,11 +206,7 @@ def test_audits_every_target_in_batch(tmp_path: Path) -> None:
         "supporting_configuration": {"count": 5, "percent": 100.0},
         "failure_reasons": {
             "insufficient_total_relatives": {"count": 0, "percent": 0.0},
-            "insufficient_ordered_transition_structure": {
-                "count": 0,
-                "percent": 0.0,
-            },
-            "insufficient_final_stage_relatives": {
+            "insufficient_ordered_stage_structure": {
                 "count": 0,
                 "percent": 0.0,
             },
@@ -213,7 +215,7 @@ def test_audits_every_target_in_batch(tmp_path: Path) -> None:
     topology = result["topology"]
     assert topology["usable_depth"]["median"] == 2
     assert topology["total_relative_capacity"]["median"] == 4
-    assert topology["completed_transition_stages"]["median"] == 1
+    assert topology["completed_stages"]["median"] == 1
     assert result["metadata_coverage"]["all_targets"]["rich_card_ready"] == {
         "count": 1,
         "percent": 20.0,
@@ -231,12 +233,12 @@ def test_filters_both_targets_and_relative_capacity(tmp_path: Path) -> None:
     connection = sqlite3.connect(normalized)
     connection.executemany(
         "INSERT INTO vernacular_names VALUES ('ott', ?, NULL, 1, 'en')",
-        ((104,), (105,)),
+        ((101,), (104,), (105,)),
     )
     connection.executemany(
         "INSERT INTO images VALUES "
         "('ott', ?, NULL, 1, 'https://example.test/image', 'Author', 'CC BY')",
-        ((104,), (105,)),
+        ((101,), (104,), (105,)),
     )
     connection.commit()
     connection.close()
@@ -245,31 +247,26 @@ def test_filters_both_targets_and_relative_capacity(tmp_path: Path) -> None:
         tree_database=tree,
         normalized_database=normalized,
         config=FeasibilityConfig(
-            members_per_stage=2,
+            members_per_stage=3,
             stages_per_game=1,
-            unlock_species_per_transition=2,
             require_rich_card_metadata=True,
         ),
     )
 
     assert result["targets"] == {
         "source_leaves": 5,
-        "total": 3,
-        "supporting_configuration": {"count": 3, "percent": 100.0},
+        "total": 4,
+        "supporting_configuration": {"count": 3, "percent": 75.0},
         "failure_reasons": {
             "insufficient_total_relatives": {"count": 0, "percent": 0.0},
-            "insufficient_ordered_transition_structure": {
-                "count": 0,
-                "percent": 0.0,
-            },
-            "insufficient_final_stage_relatives": {
-                "count": 0,
-                "percent": 0.0,
+            "insufficient_ordered_stage_structure": {
+                "count": 1,
+                "percent": 25.0,
             },
         },
     }
-    assert result["topology"]["relative_tier_capacity"]["count"] == 3
+    assert result["topology"]["relative_tier_capacity"]["count"] == 7
     assert result["metadata_coverage"]["all_targets"]["rich_card_ready"] == {
-        "count": 3,
+        "count": 4,
         "percent": 100.0,
     }

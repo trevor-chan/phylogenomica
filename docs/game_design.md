@@ -2,11 +2,11 @@
 
 ## Premise
 
-Each game has a hidden target species. The player reconstructs the evolutionary
-path toward it by repeatedly identifying one of the two visible species that
-lead deepest toward the target:
+Each game has a target species that is concealed during the transition stages
+and shown in the ultimate stage. The player reconstructs the evolutionary path
+toward it by repeatedly identifying the closest selected relative:
 
-> Which visible species takes us closer to the hidden target?
+> Which visible species takes us closer to the target?
 
 The answer is determined entirely by the phylogenetic topology represented by
 the game. Candidate images and names identify organisms; the core puzzle does
@@ -22,8 +22,10 @@ experience, not permanent constraints.
 | Stages per game, M | About 5 |
 | Total lineage members | `M * N`, about 50 |
 | Unique relative species | `M * N - 1`, about 49 |
-| Hidden target species | 1 |
-| Unlock species | `2(M - 1)`, initially 8 |
+| Target species | 1 |
+| Unlock species | `M - 1`, initially 4 |
+| Mulligan species | `M`, initially 5 |
+| Decoy species | `M * N - 2M`, initially 40 |
 
 ## Invariants
 
@@ -35,16 +37,20 @@ mode. A future alternate mode may use them without changing this mode.
 
 ### Perfect knowledge guarantees a perfect score
 
-There is no unavoidable chance in answering a represented stage. The two
-deepest selected relative species are explicit unlock species; either advances
-the game. If topology cannot distinguish selected species, the generator must
-never impose an arbitrary order on them.
+There is no unavoidable chance in answering a represented stage. In a
+transition stage, the uniquely deepest selected relative is the unlock species
+and the uniquely second-deepest is the mulligan. In the ultimate stage, the
+target is the terminal choice and the mulligan is the deepest selected
+relative. Choosing a mulligan does not advance or end the stage, but awards a
+one-point bonus so `mulligan → unlock` or `mulligan → target` scores the same
+as choosing the stage-ending card immediately. The generator must never impose
+ordered relative roles across a polytomy.
 
-### The target starts hidden
+### Target visibility is stage-scoped
 
-The target is both the unknown endpoint of the tree and a mystery constrained
-by each revealed relationship. It is not shown among the relative cards and
-receives no direct clues during normal play.
+The target is the concealed endpoint during the first `M - 1` stages. In the
+ultimate stage it is shown as a normal card with its image and names, occupies
+the terminal selectable position, and ends the game when clicked.
 
 ### One continuous tree is constructed
 
@@ -86,7 +92,7 @@ relative-species pool at that evolutionary depth.
 
 The **backbone** is this collapsed root-to-target path. The **playable
 lineage** is a target-relative projection containing exactly `M * N` selected
-species: one hidden target and `M * N - 1` unique relatives. It is not the full
+species: one target and `M * N - 1` unique relatives. It is not the full
 induced phylogeny among the selected relatives. Each relative labels a side
 branch from the backbone; intervening structure inside that off-target branch
 is contracted because the game represents only its relationship to the target.
@@ -97,12 +103,15 @@ The current vocabulary is:
   card and may be selected from an off-target branch of the backbone.
 - A **target species** meets the same metadata requirement and has enough
   ordered relative capacity to construct a valid playable lineage.
-- An **unlock species** is one of the two deepest selected relatives in a
-  non-ultimate stage. Choosing either advances to the next stage. There are
-  `2(M - 1)` unlock species.
+- An **unlock species** is the uniquely deepest selected relative in a
+  transition stage. Choosing it advances to the next stage. There are `M - 1`
+  unlock species; the target replaces the unlock in the ultimate stage.
+- A **mulligan species** is the uniquely second-deepest selected relative in a
+  stage. It occupies a distinct shallower tier from the unlock. Choosing it
+  awards one bonus point but does not advance play. There are `M` mulligans.
 - A **decoy species** is any selected species that is neither the target nor an
-  unlock species. Decoys do not advance the stage or end the game. Their total
-  count is `M * N - 1 - 2(M - 1)`, initially 41.
+  unlock or mulligan species. Decoys do not advance the stage or end the game.
+  Their total count is `M * N - 2M`, initially 40.
 
 For the initial rich-card mode, complete card metadata means a scientific name,
 a preferred English vernacular name, and a selected image with nonempty URL,
@@ -115,7 +124,7 @@ quality signals include:
 - sufficient collapsed lineage depth and relative-bearing tiers;
 - capacity for `M * N - 1` unique relatives in the requested stage shape;
 - adequate topological resolution;
-- complete metadata for the target reveal.
+- complete metadata for the target card.
 
 An ineligible target can still appear as a relative.
 
@@ -156,12 +165,13 @@ guess established no order within their tier.
 
 ### Stage unlock boundary
 
-The sister-clade terminal rule is deferred. In each non-ultimate stage, the two
-selected relatives with the deepest tiers are unlock species. They may occupy
-the same tier or two different tiers, but every unlock must be deeper than every
-decoy in that stage. A selected tier may not contain both roles within one
-stage. Unselected members of a source polytomy do not constrain the projected
-lineage.
+The sister-clade terminal rule is deferred. In a transition stage, the selected
+relative on the deepest tier is the unlock and the selected relative on the
+next-deepest tier is the mulligan. In the ultimate stage, the target replaces
+the unlock and the mulligan is the deepest selected relative. Roles must occupy
+distinct tiers, and every mulligan is deeper than every decoy in its stage. A
+selected tier has exactly one role. Unselected members of a source polytomy do
+not constrain the projected lineage.
 
 The final stage need not reach the target's literal closest biological sister
 event. Empty, metadata-poor, or simply unselected deeper source tiers may be
@@ -175,21 +185,22 @@ directly.
 
 For initial `M` and `N`:
 
-- each of the first `M - 1` stages contains `N - 2` decoys and two unlock
-  species; and
-- the ultimate stage contributes `N - 1` relative species followed by the
-  hidden target, producing exactly `M * N` lineage members overall.
+- each of the first `M - 1` stages contains `N - 2` decoys, one mulligan, and
+  one unlock; and
+- the ultimate stage contains `N - 2` decoys, one mulligan, and the selectable
+  target, producing exactly `M * N` lineage members overall.
 
 The generator should adapt to each target:
 
 1. Trace the collapsed lineage from the current game root to the target.
 2. Remove tiers with no valid relative cards.
 3. Select `M * N - 1` unique relatives from successive ordered tiers.
-4. Assign two deepest relatives as unlocks in each transition stage without
-   mixing unlock and decoy roles within a selected tier.
-5. End the ultimate stage at the hidden target; no closest-sister endpoint is
-   required.
-6. Validate hierarchy, role separation, uniqueness, and target hiding.
+4. Assign a distinct second-deepest mulligan tier and deepest unlock tier in
+   each transition stage, with all decoys shallower.
+5. In the ultimate stage, place one mulligan deeper than all decoys and put the
+   selectable target at the endpoint; no closest-sister tier is required.
+6. Validate hierarchy, role separation, uniqueness, and stage-scoped target
+   visibility.
 
 When a lineage is deeper than the game needs, sample backbone tiers across its
 usable range rather than clustering all choices near the root or target. A
@@ -236,10 +247,14 @@ themselves provide fair phylogenetic information.
 
 ## Guess and reveal rules
 
-A non-ultimate stage begins with all relative cards active. If the player
-chooses either unlock species, the stage completes and play descends to the
-next backbone region. Unlocks are the two deepest selected species even when
-they occupy distinct tiers.
+A transition stage begins with all of its cards active. Choosing the unlock
+completes the stage and descends to the next backbone region. The ultimate
+stage shows its relative cards and target card together; clicking the target
+completes the game.
+
+Choosing the mulligan does not complete the stage. It awards one bonus point,
+places the second-deepest relationship, and leaves the deeper unlock active.
+The bonus makes this route score-equivalent to choosing the unlock immediately.
 
 If the chosen species is a decoy:
 
@@ -250,27 +265,27 @@ If the chosen species is a decoy:
 - every relative in a deeper tier remains active;
 - the score is reduced only for information the game actually revealed.
 
-Example with `G` and `H` designated as unlock species:
+Example with `G` as the mulligan and `H` as the unlock:
 
 ```text
-True tiers: A - B - [C,D,E] - F - [G,H]
+True tiers: A - B - [C,D,E] - F - G - H
 
 Choose B: place A - B - ???; C D E F G H remain.
 Choose C: place C; D E F G H remain because D/E share C's tier.
 Choose F: place the intervening structure; G H remain.
-Choose G or H: complete the stage.
+Choose G: gain the mulligan point; H remains.
+Choose H: complete the stage.
 ```
 
 Reveal behavior must never remove a species that could still be deeper than the
-player's guess. The precise action that resolves the ultimate stage and reveals
-the hidden target remains an explicit gameplay decision to settle before the
-engine is implemented; target eligibility does not depend on that interaction.
+player's guess. Clicking the visible target resolves the ultimate stage.
 
 ## Scoring
 
 The score represents relative relationships resolved without requiring a
-reveal. The earlier nominal maximum of about 45 must be recalibrated around
-decoy reveals, unlock choices, and the still-open ultimate-stage transition.
+reveal. A mulligan guess awards one explicit bonus point; scoring must calibrate
+the corresponding extra guess or reveal so `mulligan → unlock` or `mulligan →
+target` and an immediate stage-ending choice produce the same stage score.
 
 The implementation must track revealed information, not merely incorrect
 clicks. One guess can expose several more-distant relationships, while guessing
@@ -293,10 +308,11 @@ history. Divergence ages are optional labels and never determine correctness.
 
 ## Endgame
 
-After the final stage, the initial endgame:
+Clicking the target in the final stage ends the game. The initial endgame then:
 
 1. resolves remaining stage structure;
-2. reveals the target image, vernacular name, and scientific name;
+2. highlights the already visible target image, vernacular name, and scientific
+   name;
 3. shows the completed cladogram;
 4. shows the final score and relationship history.
 
@@ -307,7 +323,8 @@ mode because it tests different knowledge from the core topology puzzle.
 
 The first playable version includes extant species, OneZoom topology and
 metadata, preserved OTT identifiers, collapsed monotypic chains, genuine
-polytomies, adaptive seeded generation, the hidden target, relative cards,
+polytomies, adaptive seeded generation, stage-scoped target visibility, species
+cards,
 positive scoring, and the persistent cladogram.
 
 It deliberately defers extinct species, alternate dating databases, independent
@@ -323,6 +340,5 @@ phylogenetic hypotheses.
 - How much previous tree context should remain visible while zoomed in?
 - Do images make some relationships too easy or too obscure?
 - How often do large polytomies affect play, and do players understand them?
-- Is accepting two unlocks at distinct depths intuitive to players?
-- What player action resolves the ultimate stage and reveals the target?
+- Is the mulligan bonus and its non-advancing behavior clear to players?
 - How strongly should selection avoid polytomies of three or more?

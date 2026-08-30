@@ -18,7 +18,7 @@ from phylogenomica.tree.preprocess import (
     TREE_SCHEMA_VERSION,
 )
 
-FEASIBILITY_AUDIT_VERSION = 2
+FEASIBILITY_AUDIT_VERSION = 4
 DEFAULT_TREE_DATABASE = (
     DEFAULT_NORMALIZED_DIR / f"tree-v{TREE_SCHEMA_VERSION}" / TREE_DATABASE_FILENAME
 )
@@ -34,7 +34,8 @@ class FeasibilityConfig:
 
     members_per_stage: int = 10
     stages_per_game: int = 5
-    unlock_species_per_transition: int = 2
+    unlock_species_per_transition_stage: int = 1
+    mulligan_species_per_stage: int = 1
     require_rich_card_metadata: bool = False
 
     def __post_init__(self) -> None:
@@ -42,11 +43,17 @@ class FeasibilityConfig:
             raise ValueError("members_per_stage must be positive")
         if self.stages_per_game <= 0:
             raise ValueError("stages_per_game must be positive")
-        if self.unlock_species_per_transition <= 0:
-            raise ValueError("unlock_species_per_transition must be positive")
-        if self.unlock_species_per_transition > self.members_per_stage:
+        if self.unlock_species_per_transition_stage <= 0:
+            raise ValueError("unlock_species_per_transition_stage must be positive")
+        if self.mulligan_species_per_stage <= 0:
+            raise ValueError("mulligan_species_per_stage must be positive")
+        if (
+            self.unlock_species_per_transition_stage
+            + self.mulligan_species_per_stage
+            > self.members_per_stage
+        ):
             raise ValueError(
-                "unlock_species_per_transition cannot exceed members_per_stage"
+                "unlock and mulligan species exceed transition-stage members"
             )
 
     @property
@@ -58,25 +65,41 @@ class FeasibilityConfig:
         return self.lineage_species - 1
 
     @property
-    def transition_stages(self) -> int:
-        return self.stages_per_game - 1
-
-    @property
     def decoys_per_transition_stage(self) -> int:
-        return self.members_per_stage - self.unlock_species_per_transition
+        return (
+            self.members_per_stage
+            - self.unlock_species_per_transition_stage
+            - self.mulligan_species_per_stage
+        )
 
     @property
-    def final_stage_relatives(self) -> int:
-        return self.members_per_stage - 1
+    def decoys_in_ultimate_stage(self) -> int:
+        return self.members_per_stage - self.mulligan_species_per_stage - 1
+
+    @property
+    def total_unlock_species(self) -> int:
+        return self.unlock_species_per_transition_stage * (self.stages_per_game - 1)
+
+    @property
+    def total_mulligan_species(self) -> int:
+        return self.mulligan_species_per_stage * self.stages_per_game
+
+    @property
+    def total_decoy_species(self) -> int:
+        return (
+            self.relative_species
+            - self.total_unlock_species
+            - self.total_mulligan_species
+        )
 
 
 @dataclass(frozen=True)
 class _LineageState:
     usable_depth: int
-    completed_transition_stages: int
+    completed_stages: int
     current_decoys: int
+    current_mulligans: int
     current_unlocks: int
-    final_stage_relatives: int
 
 
 @dataclass(frozen=True)
@@ -85,14 +108,12 @@ class TargetLineageMetrics:
 
     usable_depth: int
     total_relative_capacity: int
-    completed_transition_stages: int
-    final_stage_relative_capacity: int
+    completed_stages: int
 
     def supports(self, config: FeasibilityConfig) -> bool:
         return (
             self.total_relative_capacity >= config.relative_species
-            and self.completed_transition_stages >= config.transition_stages
-            and self.final_stage_relative_capacity >= config.final_stage_relatives
+            and self.completed_stages >= config.stages_per_game
         )
 
 
@@ -104,34 +125,55 @@ def _advance_lineage(
 ) -> _LineageState:
     """Assign one ordered tier to the earliest unfinished lineage role.
 
-    A tier may contain decoys or unlock species within a transition stage, but
-    never both. Unused species are allowed. Greedily completing each role at
-    its earliest tier leaves the largest possible suffix for later stages.
+    A tier has only one role within a stage. Unused species are allowed.
+    Greedily completing decoy, mulligan, and unlock roles at their earliest
+    tiers leaves the largest possible suffix for later stages. The target
+    itself completes the ultimate stage after its relative roles are filled.
     """
     if tier_capacity <= 0:
         return state
     depth = state.usable_depth + 1
-    completed = state.completed_transition_stages
+    completed = state.completed_stages
     decoys = state.current_decoys
+    mulligans = state.current_mulligans
     unlocks = state.current_unlocks
-    final_relatives = state.final_stage_relatives
 
-    if completed >= config.transition_stages:
-        final_relatives += tier_capacity
-    elif decoys < config.decoys_per_transition_stage:
+    if completed >= config.stages_per_game:
+        return _LineageState(depth, completed, decoys, mulligans, unlocks)
+
+    required_decoys = (
+        config.decoys_per_transition_stage
+        if completed < config.stages_per_game - 1
+        else config.decoys_in_ultimate_stage
+    )
+    if decoys < required_decoys:
         decoys = min(
-            config.decoys_per_transition_stage, decoys + tier_capacity
+            required_decoys, decoys + tier_capacity
         )
-    else:
-        unlocks = min(
-            config.unlock_species_per_transition, unlocks + tier_capacity
+    elif mulligans < config.mulligan_species_per_stage:
+        mulligans = min(
+            config.mulligan_species_per_stage, mulligans + tier_capacity
         )
-        if unlocks == config.unlock_species_per_transition:
+        if (
+            mulligans == config.mulligan_species_per_stage
+            and completed == config.stages_per_game - 1
+        ):
+            # The selectable target replaces the ultimate-stage unlock.
             completed += 1
             decoys = 0
+            mulligans = 0
+            unlocks = 0
+    else:
+        unlocks = min(
+            config.unlock_species_per_transition_stage, unlocks + tier_capacity
+        )
+        if unlocks == config.unlock_species_per_transition_stage:
+            completed += 1
+            decoys = 0
+            mulligans = 0
             unlocks = 0
 
-    return _LineageState(depth, completed, decoys, unlocks, final_relatives)
+    return _LineageState(depth, completed, decoys, mulligans, unlocks)
 
 
 def _target_metrics(
@@ -148,8 +190,7 @@ def _target_metrics(
     return TargetLineageMetrics(
         usable_depth=final_state.usable_depth,
         total_relative_capacity=total_relative_capacity,
-        completed_transition_stages=final_state.completed_transition_stages,
-        final_stage_relative_capacity=final_state.final_stage_relatives,
+        completed_stages=final_state.completed_stages,
     )
 
 
@@ -429,8 +470,7 @@ def audit_target_feasibility(
         )
         usable_depths: Counter[int] = Counter()
         total_relative_capacities: Counter[int] = Counter()
-        completed_transition_stages: Counter[int] = Counter()
-        final_stage_capacities: Counter[int] = Counter()
+        completed_stages: Counter[int] = Counter()
         failure_reasons: Counter[str] = Counter()
         metadata_counts: Counter[str] = Counter()
         supported_metadata_counts: Counter[str] = Counter()
@@ -492,10 +532,7 @@ def audit_target_feasibility(
                 tier_capacities[final_tier_capacity] += 1
             usable_depths[metrics.usable_depth] += 1
             total_relative_capacities[metrics.total_relative_capacity] += 1
-            completed_transition_stages[
-                metrics.completed_transition_stages
-            ] += 1
-            final_stage_capacities[metrics.final_stage_relative_capacity] += 1
+            completed_stages[metrics.completed_stages] += 1
 
             name = None if scientific_name is None else str(scientific_name)
             ott = None if ott_id is None else int(ott_id)
@@ -526,12 +563,8 @@ def audit_target_feasibility(
                     supported_metadata_counts[key] += int(present)
             elif metrics.total_relative_capacity < config.relative_species:
                 failure_reasons["insufficient_total_relatives"] += 1
-            elif (
-                metrics.completed_transition_stages < config.transition_stages
-            ):
-                failure_reasons["insufficient_ordered_transition_structure"] += 1
             else:
-                failure_reasons["insufficient_final_stage_relatives"] += 1
+                failure_reasons["insufficient_ordered_stage_structure"] += 1
             leaf_count += 1
     except sqlite3.Error as error:
         raise FeasibilityAuditError(f"SQLite audit failed: {error}") from error
@@ -553,31 +586,34 @@ def audit_target_feasibility(
             "stages_per_game": config.stages_per_game,
             "lineage_species": config.lineage_species,
             "relative_species": config.relative_species,
-            "unlock_species_per_transition": (
-                config.unlock_species_per_transition
+            "unlock_species_per_transition_stage": (
+                config.unlock_species_per_transition_stage
             ),
-            "transition_stages": config.transition_stages,
-            "total_unlock_species": (
-                config.unlock_species_per_transition * config.transition_stages
-            ),
+            "mulligan_species_per_stage": config.mulligan_species_per_stage,
+            "total_unlock_species": config.total_unlock_species,
+            "total_mulligan_species": config.total_mulligan_species,
+            "total_decoy_species": config.total_decoy_species,
             "require_rich_card_metadata": config.require_rich_card_metadata,
         },
         "interpretation": {
             "playable_lineage": (
-                "M*N species: one hidden target and M*N-1 unique relatives"
+                "M*N species: one target and M*N-1 unique relatives"
             ),
-            "transition_stage": (
-                "N minus unlock-count decoys on shallower selected tiers, then "
-                "the configured unlock species on deeper selected tiers"
+            "stage_roles": (
+                "transition stages have decoys, one deeper mulligan, and one "
+                "deepest unlock"
             ),
-            "ultimate_stage": "N-1 relatives followed by the hidden target",
+            "ultimate_stage": (
+                "decoys and one deeper mulligan precede the visible, selectable "
+                "target; clicking the target completes the game"
+            ),
             "tier_use": (
                 "empty and unselected source tiers may be skipped; no literal "
                 "closest-sister endpoint is required"
             ),
             "polytomy_roles": (
-                "a selected tier may contain decoys or unlock species within a "
-                "stage, but not both"
+                "a selected tier has exactly one role within a stage; transition-"
+                "stage mulligan and unlock tiers are distinct"
             ),
             "species_universe": (
                 "targets and relatives require a preferred English name and "
@@ -596,8 +632,7 @@ def audit_target_feasibility(
                 reason: _coverage_record(failure_reasons[reason], leaf_count)
                 for reason in (
                     "insufficient_total_relatives",
-                    "insufficient_ordered_transition_structure",
-                    "insufficient_final_stage_relatives",
+                    "insufficient_ordered_stage_structure",
                 )
             },
         },
@@ -607,12 +642,7 @@ def audit_target_feasibility(
             "total_relative_capacity": summarize_distribution(
                 total_relative_capacities
             ),
-            "completed_transition_stages": summarize_distribution(
-                completed_transition_stages
-            ),
-            "final_stage_relative_capacity": summarize_distribution(
-                final_stage_capacities
-            ),
+            "completed_stages": summarize_distribution(completed_stages),
             "target_tier_instances": sum(tier_capacities.values()),
         },
         "metadata_coverage": {
@@ -635,7 +665,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--members-per-stage", type=int, default=10)
     parser.add_argument("--stages-per-game", type=int, default=5)
-    parser.add_argument("--unlock-species", type=int, default=2)
+    parser.add_argument("--unlock-species", type=int, default=1)
+    parser.add_argument("--mulligan-species", type=int, default=1)
     parser.add_argument(
         "--require-rich-cards",
         action="store_true",
@@ -658,7 +689,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         config = FeasibilityConfig(
             members_per_stage=args.members_per_stage,
             stages_per_game=args.stages_per_game,
-            unlock_species_per_transition=args.unlock_species,
+            unlock_species_per_transition_stage=args.unlock_species,
+            mulligan_species_per_stage=args.mulligan_species,
             require_rich_card_metadata=args.require_rich_cards,
         )
         result = audit_target_feasibility(
