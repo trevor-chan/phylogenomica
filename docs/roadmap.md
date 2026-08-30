@@ -42,9 +42,9 @@ obtained.
   Docker image.~~
 - ~~Verify its database/static-tree version match and source schema.~~
 - Request the current public production SQL dump and its specific reuse terms.
-- Inspect actual node, leaf, image, name, age, and external-ID values.
-- Implement versioned schema parsing and normalized output.
-- Fail clearly on unknown source schema or mismatched input checksums.
+- ~~Inspect actual node, leaf, image, name, age, and external-ID values.~~
+- ~~Implement versioned schema parsing and normalized output.~~
+- ~~Fail clearly on unknown source schema or mismatched input checksums.~~
 
 Deliverable: a reproducible normalized local dataset plus source manifest.
 
@@ -175,6 +175,6 @@ the core loop has passed data and gameplay validation.
 
 ## Immediate next action
 
-Normalize the filtered Docker snapshot, reconcile its database records with
-matched static tree `27400288`, and run metadata and target-feasibility audits.
-Keep the current production dump request open as the release-data upgrade path.
+Use the normalized Docker snapshot to reconstruct and validate the biological
+tree, then run metadata and target-feasibility audits. Keep the current
+production dump request open as the release-data upgrade path.

@@ -108,3 +108,35 @@ Snapshot 27400288 is suitable as a matched development source for implementing
 schema parsing, normalized ingestion, topology reconstruction, and feasibility
 audits. It is not the release dataset. A current production dump and explicit
 derived-data reuse terms remain the upgrade and redistribution gates.
+
+## Normalized ingestion result
+
+On 2026-08-30, ingester version 1 built SQLite schema version 1 successfully
+from the verified raw snapshot. The ignored processed artifact is
+`data/processed/onezoom/27400288/onezoom.sqlite3`.
+
+| Measure | Result |
+|---|---:|
+| SQLite bytes | 728,903,680 |
+| Nodes | 2,235,075 |
+| Leaves | 2,235,076 |
+| Normalized representative rows | 2,497,401 |
+| Normalized vernacular rows | 812,574 |
+| Normalized image rows | 105,344 |
+| Node rows with negative `real_parent` | 2,033,497 |
+| Leaf rows with negative `real_parent` | 18 |
+
+The build used Python 3.14.7 and SQLite 3.53.2. Its database SHA-256 is
+`f45c7e6a2514133d104a705e5bec311bbd9698f36c9a802095b3ecb23e088706`;
+the exact runtime, input-manifest checksum, validation results, and reproduction
+command are retained in the local processed manifest.
+
+Validation confirmed contiguous node and leaf IDs, one expected root, no
+missing display or biological parent references, no self-parented biological
+nodes, successful SQLite integrity, and exact database/static-topology node and
+leaf counts. No display-polytomy or monotypic-chain collapse was performed.
+
+One exported vernacular contains a literal carriage return followed by an
+escaped line feed. The ingester consequently treats only LF as a physical TSV
+record separator, then decodes reviewed MySQL batch escapes within fields. A
+regression test preserves this observed source convention.

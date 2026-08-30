@@ -35,7 +35,8 @@ OneZoom is expected to provide a largely integrated working snapshot with:
 - node and leaf identifiers;
 - display-parent and biological `real_parent` relationships;
 - scientific and vernacular names;
-- taxonomic rank and OTT identifiers;
+- OTT identifiers and a leaf popularity rank (the historical snapshot does not
+  contain taxonomic rank);
 - Wikidata, EOL, GBIF, NCBI, WoRMS, IRMNG, or IPNI cross-references where
   available;
 - representative image metadata and licensing information;
@@ -177,12 +178,29 @@ The first data milestone is intentionally investigative:
 2. ~~Download and checksum one versioned topology snapshot in `data/raw/`.~~
 3. ~~Implement a first structural audit that collapses display polytomies.~~
 4. ~~Acquire and filter the historical public Docker database for development.~~
-5. Validate its schema and value conventions.
-6. Implement normalized ingestion and reconcile database IDs with its matched
-   static topology.
+5. ~~Validate its schema and value conventions.~~
+6. ~~Implement normalized ingestion and reconcile database IDs with its matched
+   static topology.~~
 7. Run metadata and target-viability audits.
 8. Revise assumptions before implementing full generation.
 9. Upgrade to a current production dump when OneZoom provides it.
+
+The implemented ingestion command verifies the raw manifest and every input
+checksum before streaming the six table projections into a versioned SQLite
+database:
+
+```bash
+conda activate phylogenomica
+phylogenomica-ingest-onezoom \
+  data/raw/onezoom/docker-2022-02-07
+```
+
+The default output is `data/processed/onezoom/27400288/`. It remains ignored
+and rebuildable. Ingestion preserves display and signed source parents,
+normalizes the biological parent from `abs(real_parent)`, validates all parent
+references, and reconciles node and leaf counts against the matched static
+topology. Biological chain collapse is deliberately deferred to tree
+preprocessing.
 
 ### Production dump request
 

@@ -60,37 +60,55 @@ new responsibilities inside the engine.
 
 ## Normalized records
 
-The exact schema will follow inspection of a real OneZoom snapshot. A likely
-normalized node contains:
+The first implemented normalized format is SQLite schema version 1. It keeps
+source nodes and leaves in separate tables because OneZoom assigns their IDs in
+separate namespaces. Ingestion does not collapse or otherwise reinterpret the
+tree.
 
 ```text
-Node
-├── node_id
-├── biological_parent_id
-├── source_parent_id
-├── is_leaf
-├── scientific_name
-├── vernacular_name
-├── rank
-├── age_ma
-├── source identifiers
-│   ├── ott_id
-│   ├── wikidata_id
-│   ├── eol_id
-│   ├── gbif_id
-│   └── ncbi_id / others
-├── representative_image
-│   ├── source and identifier
-│   ├── URL
-│   ├── creator
-│   └── license and attribution
-└── source-specific provenance
+onezoom.sqlite3
+├── dataset_metadata
+├── nodes
+│   ├── node_id
+│   ├── display_parent_id / biological_parent_id
+│   ├── source_parent / source_real_parent
+│   ├── is_polytomy_scaffold
+│   ├── scientific_name / age_ma / popularity
+│   └── OTT, Wikidata, EOL, GBIF, NCBI, and other source IDs
+├── leaves
+│   ├── leaf_id
+│   ├── display_parent_id / biological_parent_id
+│   ├── source_parent / source_real_parent
+│   ├── is_polytomy_member
+│   ├── scientific_name / extinction_date_ma / popularity rank
+│   └── source IDs
+├── node_representatives
+├── vernacular_names
+└── images
 ```
 
+For the root, both normalized parents are `NULL`; its negative source parent is
+retained as OneZoom's tree-version marker. Everywhere else,
+`biological_parent_id = abs(source_real_parent)`. A negative
+`source_real_parent` is also retained and flagged because it records membership
+in a polytomy or its display scaffold. `display_parent_id` retains the display
+tree edge independently.
+
+The historical snapshot has a leaf popularity-rank field but no taxonomic-rank
+field. Missing taxonomy rank is preserved as missing rather than inferred from
+names. Representative sets are normalized from their eight repeated source
+columns into ordered `(node, category, position, OTT ID)` rows. Name- and
+OTT-keyed vernacular/image tables share normalized tables while retaining their
+source table and row ID.
+
 Derived statistics such as child IDs, descendant-leaf count, collapsed depth,
-candidate capacity, and target quality can live in precomputed tables or
-indexes. Do not mutate raw source records to represent collapsed gameplay
-topology.
+candidate capacity, and target quality belong in later precomputed tables or
+indexes. Do not mutate source records to represent collapsed gameplay topology.
+
+Each processed directory also contains a manifest with the input-manifest
+checksum, source and schema versions, runtime versions, row counts, validation
+results, database checksum, and reproduction command. The directory is built
+under a temporary name and renamed only after validation succeeds.
 
 ## Derived tree
 

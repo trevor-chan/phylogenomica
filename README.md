@@ -84,5 +84,19 @@ writes checksums and provenance under ignored raw storage. It will not overwrite
 an existing snapshot. See the
 [Docker snapshot audit](docs/audits/onezoom_docker_27400288.md).
 
+Normalize the verified raw extraction into the ignored, rebuildable SQLite
+dataset with:
+
+```bash
+conda activate phylogenomica
+phylogenomica-ingest-onezoom \
+  data/raw/onezoom/docker-2022-02-07
+```
+
+This verifies source checksums and schemas before writing
+`data/processed/onezoom/27400288/onezoom.sqlite3`. See
+[architecture](docs/architecture.md) for the normalized schema and parent
+semantics.
+
 The project is licensed under the [MIT License](LICENSE). Source datasets and
 media retain their own licenses and attribution requirements.
