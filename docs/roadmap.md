@@ -30,12 +30,17 @@ The placeholder scripts intentionally contain no fabricated schema logic.
 ## Phase 1 — Source acquisition and ingestion
 
 Status: in progress. Static topology acquisition and its initial structural
-audit are complete for tree version `29194525`; the production SQL dump has not
-yet been obtained.
+audit are complete for tree version `29194525`. A matched historical database
+and topology `27400288` have been safely extracted from the official 2022
+Docker image for development; the current production SQL dump has not yet been
+obtained.
 
 - ~~Verify the official static-data mechanism and license references.~~
 - ~~Preserve one immutable static snapshot and its checksums locally.~~
 - ~~Inspect the current source definitions for relevant database tables.~~
+- ~~Extract an allowlisted historical database snapshot from the official
+  Docker image.~~
+- ~~Verify its database/static-tree version match and source schema.~~
 - Request the current public production SQL dump and its specific reuse terms.
 - Inspect actual node, leaf, image, name, age, and external-ID values.
 - Implement versioned schema parsing and normalized output.
@@ -170,6 +175,6 @@ the core loop has passed data and gameplay validation.
 
 ## Immediate next action
 
-Obtain and document one official OneZoom snapshot, inspect its schema, and
-replace the placeholder ingestion command with the smallest parser that can
-normalize identifiers, parents, names, and metadata for a structural audit.
+Normalize the filtered Docker snapshot, reconcile its database records with
+matched static tree `27400288`, and run metadata and target-feasibility audits.
+Keep the current production dump request open as the release-data upgrade path.

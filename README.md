@@ -66,5 +66,23 @@ stores its topology, viewer index, divergence dates, checksums, and local source
 manifest under ignored `data/raw/onezoom/`. Full taxon metadata requires a
 separately requested public OneZoom SQL dump; see the data-source documentation.
 
+For development against the historical database bundled in OneZoom's pinned
+Docker image, start it without network access or published ports and override
+its default IUCN-download command:
+
+```bash
+docker run -d --platform linux/amd64 --network none \
+  --name phylogenomica-onezoom-2022 \
+  phylogenomica/onezoom:2022-02-07 /sbin/my_init
+python scripts/extract_onezoom_docker.py
+docker stop phylogenomica-onezoom-2022
+```
+
+The extractor verifies the image and tree versions, exports only reviewed
+columns from six relevant tables, copies the three matched static files, and
+writes checksums and provenance under ignored raw storage. It will not overwrite
+an existing snapshot. See the
+[Docker snapshot audit](docs/audits/onezoom_docker_27400288.md).
+
 The project is licensed under the [MIT License](LICENSE). Source datasets and
 media retain their own licenses and attribution requirements.

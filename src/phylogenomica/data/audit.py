@@ -26,6 +26,24 @@ def latest_snapshot(root: Path) -> Path:
     return max(snapshots, key=lambda path: int(path.name))
 
 
+def snapshot_tree_version(snapshot: Path) -> str:
+    """Return a numeric tree version from the directory or its raw manifest."""
+    if snapshot.name.isascii() and snapshot.name.isdigit():
+        return snapshot.name
+
+    manifest_path = snapshot / "manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        version = manifest["tree_version"]
+    except (OSError, KeyError, json.JSONDecodeError) as error:
+        raise ValueError(
+            f"snapshot has no readable tree version: {snapshot}"
+        ) from error
+    if not isinstance(version, str) or not version.isascii() or not version.isdigit():
+        raise ValueError(f"invalid tree version in {manifest_path}: {version!r}")
+    return version
+
+
 def audit_snapshot(snapshot: Path) -> dict[str, object]:
     """Return a JSON-serializable first-pass snapshot audit."""
     topology = read_topology(find_snapshot_file(snapshot, "completetree"))
@@ -33,7 +51,7 @@ def audit_snapshot(snapshot: Path) -> dict[str, object]:
     return {
         "schema_version": 1,
         "source": "OneZoom static viewer data",
-        "tree_version": snapshot.name,
+        "tree_version": snapshot_tree_version(snapshot),
         "topology": audit_bracket_topology(topology).to_dict(),
         "divergence_dates": {
             "leaves": len(dates["leaves"]),

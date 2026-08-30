@@ -8,10 +8,19 @@ snapshot `29194525`. It contains the complete compact topology, viewer cut map,
 and sparse divergence dates. See the
 [snapshot audit](audits/onezoom_29194525.md) for checksums and findings.
 
-The static files do not contain the complete taxon metadata required by the
-game. OneZoom's current developer guidance directs downstream projects to
-request a public production SQL dump. Obtaining that dump and confirming its
-license and attribution terms are the remaining source-acquisition gate.
+On 2026-08-30, the project also extracted a matched historical database and
+static tree `27400288` from OneZoom's official Docker image, created on
+2022-02-07. The network-disabled, allowlist-based extraction contains the six
+relevant tables but omits IUCN, sponsorship, reservations, authentication, and
+other unrelated data. See the
+[Docker snapshot audit](audits/onezoom_docker_27400288.md).
+
+The current static files do not contain the complete taxon metadata required by
+the game, while the matched Docker database is historical. It is sufficient to
+unblock ingestion and feasibility work but is not the intended release source.
+OneZoom's current developer guidance directs downstream projects to request a
+public production SQL dump. Obtaining that dump and confirming its license and
+attribution terms remain the release-data gate.
 
 The project should not commit an upstream database merely because it is
 downloadable. Redistribution of any derived gameplay bundle must be reviewed
@@ -167,11 +176,13 @@ The first data milestone is intentionally investigative:
 1. ~~Identify the official static distribution and source documentation.~~
 2. ~~Download and checksum one versioned topology snapshot in `data/raw/`.~~
 3. ~~Implement a first structural audit that collapses display polytomies.~~
-4. Request and obtain the public production SQL dump from OneZoom.
-5. Validate the dump's schema and value conventions.
-6. Implement normalized ingestion and reconcile SQL IDs with static topology.
+4. ~~Acquire and filter the historical public Docker database for development.~~
+5. Validate its schema and value conventions.
+6. Implement normalized ingestion and reconcile database IDs with its matched
+   static topology.
 7. Run metadata and target-viability audits.
 8. Revise assumptions before implementing full generation.
+9. Upgrade to a current production dump when OneZoom provides it.
 
 ### Production dump request
 

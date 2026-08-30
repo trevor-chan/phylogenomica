@@ -14,6 +14,7 @@ dependencies = []
 
 [project.scripts]
 phylogenomica-download-onezoom = "phylogenomica.data.onezoom_download:main"
+phylogenomica-extract-onezoom-docker = "phylogenomica.data.onezoom_docker:main"
 phylogenomica-audit = "phylogenomica.data.audit:main"
 
 [project.optional-dependencies]

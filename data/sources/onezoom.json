@@ -6,12 +6,16 @@
   "discovery_url": "https://www.onezoom.org/life.html",
   "static_data_url_template": "https://www.onezoom.org/OZtree/static/FinalOutputs/data/{name}_{tree_version}.js.gz",
   "source_repository": "https://github.com/OneZoom/OZtree",
+  "docker_repository": "https://github.com/OneZoom/OZtree-docker",
+  "docker_image": "onezoom/oztree@sha256:8d45f6f91bf0e9370803642334eb172778bcfad70ad1f7b4513d5db2cbc5dd3e",
   "license_url": "https://www.onezoom.org/OZtree/static/downloads/OneZoom_License_V1.pdf",
   "license_faq_url": "https://www.onezoom.org/OZtree/static/downloads/OneZoom_License_V1_FAQ.pdf",
   "data_sources_url": "https://www.onezoom.org/data_sources.html",
   "redistribution_status": "review-required",
   "notes": [
     "Static viewer files provide topology and divergence dates, not complete taxon metadata.",
+    "The pinned 2022 Docker image supplies a matched historical database and static tree for local development.",
+    "Docker extraction is column-allowlisted and excludes IUCN, price, sponsorship, reservation, authentication, and unrelated tables.",
     "OneZoom directs projects needing the full public database to request a production SQL dump.",
     "Do not promote source or derived data into the tracked gameplay bundle until redistribution terms are reviewed."
   ]
