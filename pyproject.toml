@@ -20,6 +20,7 @@ phylogenomica-audit = "phylogenomica.data.audit:main"
 phylogenomica-build-tree = "phylogenomica.tree.preprocess:main"
 phylogenomica-lineage = "phylogenomica.tree.query:main"
 phylogenomica-audit-targets = "phylogenomica.generation.feasibility:main"
+phylogenomica-build-eligibility = "phylogenomica.generation.eligibility:main"
 
 [project.optional-dependencies]
 dev = [

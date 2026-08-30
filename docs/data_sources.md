@@ -242,9 +242,16 @@ Feasibility audit version 4 has completed this measurement for every rich-card
 leaf in the historical development snapshot. Of 44,361 leaves with a preferred
 English name and complete licensed best-image record, 43,032 support a lineage
 of 49 unique relatives and one target. No target fails total relative capacity;
-1,329 fail only the ordered transition-stage and ultimate-stage role shape. See the
-[Docker snapshot audit](audits/onezoom_docker_27400288.md) for the full
+1,329 fail only the ordered transition-stage and ultimate-stage role shape. See
+the [Docker snapshot audit](audits/onezoom_docker_27400288.md) for the full
 interpretation and the superseded conservative results.
+
+Eligibility index version 1 persists the 44,361 metadata-valid candidates and
+their per-target topology evidence under ignored processed storage. It contains
+43,032 eligible targets, records the 1,329 topology failures by reason code, and
+is 3,055,616 bytes. Its manifest preserves the configuration and checksums for
+both source databases; it is rebuildable evidence, not yet a reviewed gameplay
+bundle.
 
 The audit is the decision point for changing lineage-member count, stage count,
 target requirements, selection heuristics, or the contents of the committed

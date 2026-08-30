@@ -141,11 +141,25 @@ This audit retains 43,032 of 44,361 fully card-ready target species. The result
 remains an ignored, reproducible artifact; reviewed findings are recorded in
 the [Docker snapshot audit](docs/audits/onezoom_docker_27400288.md).
 
+Persist those results as a versioned, queryable target index:
+
+```bash
+phylogenomica-build-eligibility data/processed/onezoom/27400288
+```
+
+Eligibility index version 1 verifies the normalized and tree manifests, writes
+one deterministic SQLite row for each metadata-valid potential target, records
+explicit topology failure reasons, and writes an atomic manifest with source
+checksums and the exact policy configuration. On the historical snapshot the
+index contains 44,361 candidates, of which 43,032 are eligible, and occupies
+3,055,616 bytes. Source leaves excluded by the card policy are summarized in
+the manifest rather than inflating the generator-facing database.
+
 The current implementation covers reproducible acquisition, filtered
 extraction, normalized ingestion, biological-tree reconstruction, structural
-validation, read-only topology queries, and batch target-feasibility analysis.
-The next milestone is a versioned eligibility index with explicit reason
-codes, followed by deterministic representative selection.
+validation, read-only topology queries, batch target-feasibility analysis, and
+a versioned per-target eligibility index. The next milestone is deterministic
+representative selection across the indexed targets' ordered lineage tiers.
 
 The project is licensed under the [MIT License](LICENSE). Source datasets and
 media retain their own licenses and attribution requirements.

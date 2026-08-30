@@ -324,8 +324,7 @@ mode because it tests different knowledge from the core topology puzzle.
 The first playable version includes extant species, OneZoom topology and
 metadata, preserved OTT identifiers, collapsed monotypic chains, genuine
 polytomies, adaptive seeded generation, stage-scoped target visibility, species
-cards,
-positive scoring, and the persistent cladogram.
+cards, positive scoring, and the persistent cladogram.
 
 It deliberately defers extinct species, alternate dating databases, independent
 taxonomy integration, trait clues, multiplayer, user-authored trees, free-text

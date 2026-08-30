@@ -220,6 +220,34 @@ phylogenomica-audit-targets data/processed/onezoom/27400288 \
   --output data/processed/onezoom/27400288/target-feasibility-v4/rich-cards.json
 ```
 
+### Persisted target-eligibility index
+
+Eligibility index version 1 converts the aggregate result into a deterministic,
+queryable SQLite artifact. It indexes the 44,361 leaves meeting the rich-card
+policy, marks 43,032 eligible, and assigns
+`insufficient_ordered_stage_structure` to the other 1,329. The 2,190,715 source
+leaves outside the configured target universe are summarized with overlapping
+metadata exclusion counts in the manifest instead of being copied into the
+generator-facing table.
+
+| Artifact measure | Result |
+|---|---:|
+| Indexed target rows | 44,361 |
+| Eligible target rows | 43,032 |
+| Ineligible indexed rows | 1,329 |
+| SQLite size | 3,055,616 bytes |
+| SQLite SHA-256 | `b98354d7c3cc84916aa290ccedf282e6e54018e159673c124ac12bec132c8676` |
+
+The ignored artifact is generated atomically with:
+
+```bash
+phylogenomica-build-eligibility data/processed/onezoom/27400288
+```
+
+Its manifest pins the feasibility configuration, schema and algorithm versions,
+normalized/tree input checksums, reason definitions and counts, integrity
+validation, output checksum, and reproduction command.
+
 ### Superseded models
 
 Audit version 1 required the ultimate stage to reach the literal closest

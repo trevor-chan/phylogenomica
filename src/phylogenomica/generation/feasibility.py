@@ -6,7 +6,7 @@ import argparse
 import json
 import sqlite3
 from collections import Counter
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -115,6 +115,46 @@ class TargetLineageMetrics:
             self.total_relative_capacity >= config.relative_species
             and self.completed_stages >= config.stages_per_game
         )
+
+
+@dataclass(frozen=True)
+class TargetEvaluation:
+    """Eligibility evidence for one source leaf under one configuration."""
+
+    target_id: int
+    metrics: TargetLineageMetrics
+    metadata_eligible: bool
+    topology_supported: bool
+    eligible: bool
+    scientific_name_present: bool
+    ott_id_present: bool
+    preferred_english_vernacular: bool
+    overall_best_image: bool
+    licensed_overall_best_image: bool
+    card_ready: bool
+    rich_card_ready: bool
+    reason_codes: tuple[str, ...]
+
+
+def _reason_codes(
+    *,
+    metrics: TargetLineageMetrics,
+    flags: Mapping[str, bool],
+    config: FeasibilityConfig,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    if config.require_rich_card_metadata:
+        if not flags["scientific_name"]:
+            reasons.append("missing_scientific_name")
+        if not flags["preferred_english_vernacular"]:
+            reasons.append("missing_preferred_english_vernacular")
+        if not flags["licensed_overall_best_image"]:
+            reasons.append("missing_licensed_overall_best_image")
+    if metrics.total_relative_capacity < config.relative_species:
+        reasons.append("insufficient_total_relatives")
+    elif metrics.completed_stages < config.stages_per_game:
+        reasons.append("insufficient_ordered_stage_structure")
+    return tuple(reasons)
 
 
 def _advance_lineage(
@@ -262,6 +302,24 @@ def _metadata_coverage(
     counts: Mapping[str, int], total: int
 ) -> dict[str, dict[str, int | float]]:
     return {key: _coverage_record(value, total) for key, value in counts.items()}
+
+
+def feasibility_configuration(config: FeasibilityConfig) -> dict[str, int | bool]:
+    """Serialize the complete policy input that determines eligibility."""
+    return {
+        "members_per_stage": config.members_per_stage,
+        "stages_per_game": config.stages_per_game,
+        "lineage_species": config.lineage_species,
+        "relative_species": config.relative_species,
+        "unlock_species_per_transition_stage": (
+            config.unlock_species_per_transition_stage
+        ),
+        "mulligan_species_per_stage": config.mulligan_species_per_stage,
+        "total_unlock_species": config.total_unlock_species,
+        "total_mulligan_species": config.total_mulligan_species,
+        "total_decoy_species": config.total_decoy_species,
+        "require_rich_card_metadata": config.require_rich_card_metadata,
+    }
 
 
 def _database_metadata(connection: sqlite3.Connection) -> dict[str, str]:
@@ -418,8 +476,15 @@ def audit_target_feasibility(
     tree_database: Path = DEFAULT_TREE_DATABASE,
     normalized_database: Path = DEFAULT_NORMALIZED_DIR / DATABASE_FILENAME,
     config: FeasibilityConfig = FeasibilityConfig(),
+    evaluation_handler: Callable[[TargetEvaluation], None] | None = None,
 ) -> dict[str, object]:
-    """Audit every leaf using one internal-node pass and one leaf stream."""
+    """Audit every leaf using one internal-node pass and one leaf stream.
+
+    When supplied, ``evaluation_handler`` receives evidence for every source
+    leaf, including leaves excluded by the configured target metadata policy.
+    Aggregate audit results continue to describe only the configured target
+    universe.
+    """
     if not tree_database.is_file():
         raise FeasibilityAuditError(f"tree database does not exist: {tree_database}")
     if not normalized_database.is_file():
@@ -497,11 +562,6 @@ def audit_target_feasibility(
         for leaf_id, parent_id, scientific_name, ott_id in leaf_rows:
             leaf_id = int(leaf_id)
             source_leaf_count += 1
-            if (
-                config.require_rich_card_metadata
-                and leaf_id not in metadata_ready_leaf_ids
-            ):
-                continue
             parent_id = int(parent_id)
             try:
                 parent_descendants, parent_state = node_states[parent_id]
@@ -528,11 +588,6 @@ def audit_target_feasibility(
                 total_relative_capacity=total_relative_capacity,
                 config=config,
             )
-            if final_tier_capacity:
-                tier_capacities[final_tier_capacity] += 1
-            usable_depths[metrics.usable_depth] += 1
-            total_relative_capacities[metrics.total_relative_capacity] += 1
-            completed_stages[metrics.completed_stages] += 1
 
             name = None if scientific_name is None else str(scientific_name)
             ott = None if ott_id is None else int(ott_id)
@@ -553,10 +608,46 @@ def audit_target_feasibility(
             flags["rich_card_ready"] = flags["card_ready"] and flags[
                 "preferred_english_vernacular"
             ]
+            metadata_eligible = (
+                flags["rich_card_ready"]
+                if config.require_rich_card_metadata
+                else True
+            )
+            topology_supported = metrics.supports(config)
+            reasons = _reason_codes(metrics=metrics, flags=flags, config=config)
+            evaluation = TargetEvaluation(
+                target_id=leaf_id,
+                metrics=metrics,
+                metadata_eligible=metadata_eligible,
+                topology_supported=topology_supported,
+                eligible=metadata_eligible and topology_supported,
+                scientific_name_present=flags["scientific_name"],
+                ott_id_present=flags["ott_id"],
+                preferred_english_vernacular=flags[
+                    "preferred_english_vernacular"
+                ],
+                overall_best_image=flags["overall_best_image"],
+                licensed_overall_best_image=flags[
+                    "licensed_overall_best_image"
+                ],
+                card_ready=flags["card_ready"],
+                rich_card_ready=flags["rich_card_ready"],
+                reason_codes=reasons,
+            )
+            if evaluation_handler is not None:
+                evaluation_handler(evaluation)
+            if not metadata_eligible:
+                continue
+
+            if final_tier_capacity:
+                tier_capacities[final_tier_capacity] += 1
+            usable_depths[metrics.usable_depth] += 1
+            total_relative_capacities[metrics.total_relative_capacity] += 1
+            completed_stages[metrics.completed_stages] += 1
             for key, present in flags.items():
                 metadata_counts[key] += int(present)
 
-            supported = metrics.supports(config)
+            supported = topology_supported
             if supported:
                 supported_targets += 1
                 for key, present in flags.items():
@@ -581,20 +672,7 @@ def audit_target_feasibility(
         "feasibility_audit_version": FEASIBILITY_AUDIT_VERSION,
         "generated_at": datetime.now(UTC).isoformat(),
         "dataset_version": dataset_version,
-        "configuration": {
-            "members_per_stage": config.members_per_stage,
-            "stages_per_game": config.stages_per_game,
-            "lineage_species": config.lineage_species,
-            "relative_species": config.relative_species,
-            "unlock_species_per_transition_stage": (
-                config.unlock_species_per_transition_stage
-            ),
-            "mulligan_species_per_stage": config.mulligan_species_per_stage,
-            "total_unlock_species": config.total_unlock_species,
-            "total_mulligan_species": config.total_mulligan_species,
-            "total_decoy_species": config.total_decoy_species,
-            "require_rich_card_metadata": config.require_rich_card_metadata,
-        },
+        "configuration": feasibility_configuration(config),
         "interpretation": {
             "playable_lineage": (
                 "M*N species: one target and M*N-1 unique relatives"

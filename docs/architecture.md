@@ -170,14 +170,31 @@ TargetEligibility
 ├── usable_depth
 ├── total_relative_capacity
 ├── completed_stages
-├── name/image/age coverage
-├── quality score and reasons
+├── name/image coverage flags
+├── metadata and topology eligibility
+├── zero or more explicit reason codes
 └── eligible
 ```
 
 Species that fail target eligibility remain selectable as relatives.
 Eligibility policy is configuration so audit evidence can change thresholds
 without rewriting topology code.
+
+Eligibility index schema version 1 stores this evidence in
+`target_eligibility.sqlite3`. The primary table contains one row for every leaf
+in the configured target universe, and `target_reasons` stores normalized,
+documented failure codes. The initial rich-card policy indexes 44,361 potential
+targets rather than copying 2,190,715 leaves that already fail its presentation
+requirements. Counts for excluded source leaves and their overlapping metadata
+reasons remain in the manifest.
+
+`phylogenomica.generation.eligibility` builds the directory atomically after
+verifying the normalized and tree database manifests and checksums. Its own
+manifest pins the complete feasibility configuration, audit/index/schema
+versions, source checksums, row counts, reason definitions, validation results,
+database checksum, and reproduction command. The SQLite bytes are deterministic
+for identical versioned inputs. `TargetEligibilityIndex` provides read-only
+lookup and ordered eligible-target iteration for the selector.
 
 ### Batch feasibility audit
 

@@ -26,11 +26,14 @@ Completed engineering foundations:
 - streaming normalized SQLite ingestion with an atomic manifest;
 - corrected reconstruction of OneZoom biological topology from `real_parent`;
 - root, reference, cycle, reachability, degree, polytomy, and SQLite validation;
-- direct and collapsed parent/depth/descendant indexes; and
+- direct and collapsed parent/depth/descendant indexes;
 - read-only children, ancestry, LCA, descendant, and ordered sister-group
-  queries, plus a target-lineage diagnostic command; and
+  queries, plus a target-lineage diagnostic command;
 - an exact batch feasibility audit over every historical leaf, including
-  topology distributions, explicit failure categories, and metadata coverage.
+  topology distributions, explicit failure categories, and metadata coverage;
+  and
+- a deterministic, manifest-backed target-eligibility index with a read-only
+  query interface.
 
 The historical development snapshot has 2,235,076 leaves, 201,578 biological
 internal nodes, 104,142 bifurcations, and 97,436 genuine polytomies. It has no
@@ -56,14 +59,21 @@ Earlier audit versions remain in the snapshot audit as evidence for removing
 closest-sister terminal requirements and refining the stage roles. They are not
 current target eligibility counts.
 
+Eligibility index version 1 now stores all 44,361 metadata-valid potential
+targets and their per-target metrics. It marks 43,032 eligible and assigns
+`insufficient_ordered_stage_structure` to the remaining 1,329. The deterministic
+SQLite artifact is 3,055,616 bytes; the manifest pins the source checksums,
+policy, versions, reason definitions, and validation counts. Metadata-invalid
+source leaves are represented by aggregate manifest evidence rather than
+generator-facing rows.
+
 The next implementation sequence is:
 
-1. persist the version-4 target-eligibility index and reason codes;
-2. implement deterministic relative selection using topology first and
+1. implement deterministic relative selection using topology first and
    documented metadata-quality preferences second;
-3. assemble and validate immutable seeded games;
-4. implement UI-independent guess, reveal, score, and stage transitions; and
-5. compact a reviewed, licensed gameplay-ready subset before frontend work.
+2. assemble and validate immutable seeded games;
+3. implement UI-independent guess, reveal, score, and stage transitions; and
+4. compact a reviewed, licensed gameplay-ready subset before frontend work.
 
 A current production dump and explicit derived-data redistribution terms remain
 parallel release gates; development continues against the matched historical
@@ -139,12 +149,12 @@ the initial game parameters.
 
 ## Phase 4 — Target lineage and eligibility
 
-Status: in progress. Per-target topology diagnostics and aggregate feasibility
-are implemented; dataset-wide eligibility policy and indexing remain.
+Status: complete for the historical development snapshot. A future production
+snapshot will rebuild the same versioned artifact.
 
 - ~~Extract a collapsed root-to-target path.~~
 - ~~Enumerate off-target sister pools as ordered divergence tiers.~~
-- Calculate target eligibility and quality with reason codes.
+- ~~Calculate target eligibility and topology evidence with reason codes.~~
 - ~~Provide diagnostic output for arbitrary targets.~~
 
 Deliverable: tested target-lineage extraction and an eligible-target index.
@@ -245,7 +255,7 @@ the core loop has passed data and gameplay validation.
 
 ## Immediate next action
 
-Implement the versioned target-eligibility index and explicit reason codes,
-using the feasibility audit's topology evidence while keeping metadata quality
-separate and configurable. Keep the current production dump request open as
-the release-data upgrade path.
+Implement deterministic relative selection for one indexed target, using
+ordered topology tiers first and documented metadata-quality preferences
+second. Keep the current production dump request open as the release-data
+upgrade path.

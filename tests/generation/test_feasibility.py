@@ -1,9 +1,17 @@
+import json
 import sqlite3
 from collections import Counter
 from pathlib import Path
 
 import pytest
 
+from phylogenomica.data.onezoom_download import sha256_file
+from phylogenomica.generation.eligibility import (
+    ELIGIBILITY_DATABASE_FILENAME,
+    TargetEligibilityError,
+    TargetEligibilityIndex,
+    build_target_eligibility_index,
+)
 from phylogenomica.generation.feasibility import (
     FeasibilityConfig,
     _advance_lineage,
@@ -162,7 +170,9 @@ def _write_normalized_database(path: Path) -> None:
     connection.close()
 
 
-def _write_tree_database(path: Path) -> None:
+def _write_tree_database(
+    path: Path, *, normalized_database_sha256: str = "abc"
+) -> None:
     source = sqlite3.connect(":memory:")
     source.execute(
         "CREATE TABLE leaves (leaf_id INTEGER, biological_parent_id INTEGER)"
@@ -180,9 +190,51 @@ def _write_tree_database(path: Path) -> None:
         source=source,
         analysis=analysis,
         dataset_version="test-1",
-        normalized_database_sha256="abc",
+        normalized_database_sha256=normalized_database_sha256,
     )
     source.close()
+
+
+def _write_processed_manifests(normalized_dir: Path) -> None:
+    normalized_database = normalized_dir / "onezoom.sqlite3"
+    normalized_sha256 = sha256_file(normalized_database)
+    normalized_manifest = {
+        "schema_version": 1,
+        "database_schema_version": 1,
+        "dataset_version": "test-1",
+        "source_tree_version": "test-tree",
+        "database": {
+            "name": normalized_database.name,
+            "bytes": normalized_database.stat().st_size,
+            "sha256": normalized_sha256,
+        },
+    }
+    (normalized_dir / "manifest.json").write_text(
+        json.dumps(normalized_manifest), encoding="utf-8"
+    )
+
+    tree_dir = normalized_dir / "tree-v1"
+    tree_dir.mkdir()
+    tree_database = tree_dir / "biological_tree.sqlite3"
+    _write_tree_database(
+        tree_database, normalized_database_sha256=normalized_sha256
+    )
+    tree_manifest = {
+        "schema_version": 1,
+        "dataset_version": "test-1",
+        "source_tree_version": "test-tree",
+        "tree_builder_version": 1,
+        "tree_schema_version": 1,
+        "source": {"normalized_database_sha256": normalized_sha256},
+        "database": {
+            "name": tree_database.name,
+            "bytes": tree_database.stat().st_size,
+            "sha256": sha256_file(tree_database),
+        },
+    }
+    (tree_dir / "manifest.json").write_text(
+        json.dumps(tree_manifest), encoding="utf-8"
+    )
 
 
 def test_audits_every_target_in_batch(tmp_path: Path) -> None:
@@ -270,3 +322,105 @@ def test_filters_both_targets_and_relative_capacity(tmp_path: Path) -> None:
         "count": 4,
         "percent": 100.0,
     }
+
+
+def _write_eligibility_sources(normalized_dir: Path) -> None:
+    normalized_dir.mkdir()
+    normalized = normalized_dir / "onezoom.sqlite3"
+    _write_normalized_database(normalized)
+    connection = sqlite3.connect(normalized)
+    connection.execute(
+        "UPDATE leaves SET scientific_name = NULL WHERE leaf_id = 2"
+    )
+    connection.executemany(
+        "INSERT INTO vernacular_names VALUES ('ott', ?, NULL, 1, 'en')",
+        ((101,), (104,), (105,)),
+    )
+    connection.executemany(
+        "INSERT INTO images VALUES "
+        "('ott', ?, NULL, 1, 'https://example.test/image', 'Author', 'CC BY')",
+        ((101,), (104,), (105,)),
+    )
+    connection.commit()
+    connection.close()
+    _write_processed_manifests(normalized_dir)
+
+
+def test_builds_deterministic_queryable_target_eligibility_index(
+    tmp_path: Path,
+) -> None:
+    normalized_dir = tmp_path / "processed"
+    _write_eligibility_sources(normalized_dir)
+    config = FeasibilityConfig(
+        members_per_stage=3,
+        stages_per_game=1,
+        require_rich_card_metadata=True,
+    )
+
+    output_a, manifest_a = build_target_eligibility_index(
+        normalized_dir=normalized_dir,
+        output_dir=tmp_path / "eligibility-a",
+        config=config,
+    )
+    output_b, manifest_b = build_target_eligibility_index(
+        normalized_dir=normalized_dir,
+        output_dir=tmp_path / "eligibility-b",
+        config=config,
+    )
+
+    assert manifest_a["validation"] == {
+        "source_targets": 5,
+        "indexed_targets": 4,
+        "metadata_excluded_targets": 1,
+        "eligible_targets": 3,
+        "ineligible_indexed_targets": 1,
+        "eligible_targets_with_reasons": 0,
+        "ineligible_targets_without_reasons": 0,
+        "sqlite_integrity_check": "ok",
+    }
+    assert manifest_a["database"]["sha256"] == manifest_b["database"]["sha256"]
+    assert manifest_a["source_exclusion_reason_counts"] == {
+        "missing_licensed_overall_best_image": 1,
+        "missing_preferred_english_vernacular": 1,
+        "missing_scientific_name": 1,
+    }
+
+    with TargetEligibilityIndex(
+        output_a / ELIGIBILITY_DATABASE_FILENAME
+    ) as index:
+        eligible_ids = list(index.iter_eligible_target_ids())
+        assert len(eligible_ids) == 3
+        assert eligible_ids == sorted(eligible_ids)
+        assert index.get(999) is None
+
+        assert index.get(2) is None
+
+        topology_failures = [
+            evaluation
+            for target_id in range(1, 6)
+            if (evaluation := index.get(target_id)) is not None
+            and evaluation.metadata_eligible
+            and not evaluation.topology_supported
+        ]
+        assert len(topology_failures) == 1
+        assert topology_failures[0].reason_codes == (
+            "insufficient_ordered_stage_structure",
+        )
+
+
+def test_refuses_to_overwrite_target_eligibility_index(tmp_path: Path) -> None:
+    normalized_dir = tmp_path / "processed"
+    _write_eligibility_sources(normalized_dir)
+    output = tmp_path / "eligibility"
+    output.mkdir()
+
+    with pytest.raises(TargetEligibilityError, match="already exists"):
+        build_target_eligibility_index(
+            normalized_dir=normalized_dir,
+            output_dir=output,
+            config=FeasibilityConfig(
+                members_per_stage=3,
+                stages_per_game=1,
+                require_rich_card_metadata=True,
+            ),
+        )
