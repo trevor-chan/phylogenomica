@@ -15,7 +15,7 @@ def test_audits_binary_tree() -> None:
 
 
 def test_collapses_brace_scaffold_into_polytomy() -> None:
-    audit = audit_bracket_topology("{{}}")
+    audit = audit_bracket_topology("({})")
 
     assert audit.display_internal_nodes == 2
     assert audit.biological_internal_nodes == 1
@@ -31,24 +31,24 @@ def test_handles_polytomy_below_binary_root() -> None:
     audit = audit_bracket_topology("({{}})")
 
     assert audit.leaves == 4
-    assert audit.biological_internal_nodes == 2
-    assert audit.polytomy_size_histogram == {3: 1}
-    assert audit.max_biological_node_depth == 1
-    assert audit.max_biological_leaf_depth == 2
+    assert audit.biological_internal_nodes == 1
+    assert audit.polytomy_size_histogram == {4: 1}
+    assert audit.max_biological_node_depth == 0
+    assert audit.max_biological_leaf_depth == 1
 
 
-def test_counts_two_child_brace_group_as_bifurcation() -> None:
-    audit = audit_bracket_topology("{}")
+def test_records_two_child_brace_group_as_scaffold_diagnostic() -> None:
+    audit = audit_bracket_topology("({})")
 
     assert audit.biological_internal_nodes == 1
-    assert audit.bifurcations == 1
-    assert audit.polytomies == 0
+    assert audit.bifurcations == 0
+    assert audit.polytomies == 1
     assert audit.polytomy_marker_groups == 1
     assert audit.binary_polytomy_markers == 1
-    assert audit.polytomy_size_histogram == {}
+    assert audit.polytomy_size_histogram == {3: 1}
 
 
-@pytest.mark.parametrize("topology", ["", "(()", "())", "(}"])
+@pytest.mark.parametrize("topology", ["", "(()", "())", "(}", "{}"])
 def test_rejects_malformed_topology(topology: str) -> None:
     with pytest.raises(TopologyError):
         audit_bracket_topology(topology)

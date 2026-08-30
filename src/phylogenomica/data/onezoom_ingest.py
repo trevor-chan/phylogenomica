@@ -28,7 +28,7 @@ from phylogenomica.data.onezoom_download import sha256_file
 from phylogenomica.data.onezoom_static import find_snapshot_file, read_topology
 from phylogenomica.tree.bracket_audit import audit_bracket_topology
 
-INGESTER_VERSION = 1
+INGESTER_VERSION = 2
 DATABASE_SCHEMA_VERSION = 1
 DATABASE_FILENAME = "onezoom.sqlite3"
 DEFAULT_PROCESSED_ROOT = Path("data/processed/onezoom")

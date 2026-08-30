@@ -98,5 +98,15 @@ This verifies source checksums and schemas before writing
 [architecture](docs/architecture.md) for the normalized schema and parent
 semantics.
 
+Build the validated biological topology as a second ignored artifact:
+
+```bash
+phylogenomica-build-tree data/processed/onezoom/27400288
+```
+
+This removes only OneZoom's artificial display scaffold, validates root,
+cycles, reachability, degrees, and polytomies, and writes direct and collapsed
+parent/depth indexes under `tree-v1/`.
+
 The project is licensed under the [MIT License](LICENSE). Source datasets and
 media retain their own licenses and attribution requirements.

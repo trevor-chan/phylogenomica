@@ -1,9 +1,10 @@
 """Structural audit of OneZoom's compact bracket topology.
 
-Parentheses represent genuine binary nodes. Braces represent the binary
-scaffolding OneZoom uses to display a biological polytomy. A connected run of
-brace nodes is counted here as one biological node whose frontier contains all
-of the original children.
+Parentheses represent source records for biological internal nodes. Braces are
+binary display scaffolding that expands the child frontier of the enclosing
+parenthesis node. This interpretation is verified against OneZoom's
+``real_parent`` relationships: brace nodes do not introduce a separate
+biological event.
 """
 
 from __future__ import annotations
@@ -51,7 +52,8 @@ def audit_bracket_topology(topology: str) -> TopologyAudit:
     stack: list[_Frame] = []
     display_nodes = 0
     bifurcations = 0
-    outer_polytomies = 0
+    brace_groups = 0
+    binary_brace_groups = 0
     brace_nodes = 0
     roots = 0
     max_node_depth = 0
@@ -65,7 +67,7 @@ def audit_bracket_topology(topology: str) -> TopologyAudit:
                 parent = stack[-1]
                 biological_depth = (
                     parent.biological_depth
-                    if parent.opener == "{" and character == "{"
+                    if character == "{"
                     else parent.biological_depth + 1
                 )
             else:
@@ -75,9 +77,7 @@ def audit_bracket_topology(topology: str) -> TopologyAudit:
             stack.append(_Frame(character, biological_depth))
             display_nodes += 1
             max_node_depth = max(max_node_depth, biological_depth)
-            if character == "(":
-                bifurcations += 1
-            else:
+            if character == "{":
                 brace_nodes += 1
             continue
 
@@ -99,38 +99,41 @@ def audit_bracket_topology(topology: str) -> TopologyAudit:
 
         if frame.opener == "{":
             frontier_size = frame.flattened_frontier + implicit_leaves
-            is_outer_polytomy = not stack or stack[-1].opener != "{"
-            if is_outer_polytomy:
-                outer_polytomies += 1
-                polytomy_sizes[frontier_size] += 1
+            is_outer_brace_group = not stack or stack[-1].opener != "{"
+            if is_outer_brace_group:
+                brace_groups += 1
+                binary_brace_groups += frontier_size == 2
         else:
+            biological_children = frame.flattened_frontier + implicit_leaves
+            if biological_children == 2:
+                bifurcations += 1
+            else:
+                polytomy_sizes[biological_children] += 1
             frontier_size = 1
 
         if stack:
             parent = stack[-1]
             parent.internal_children += 1
-            parent.flattened_frontier += (
-                frontier_size if frame.opener == "{" else 1
-            )
+            parent.flattened_frontier += frontier_size if frame.opener == "{" else 1
 
     if stack:
         raise TopologyError(f"{len(stack)} topology nodes are unclosed")
     if roots != 1:
         raise TopologyError(f"expected one topology root; found {roots}")
+    if topology[0] != "(":
+        raise TopologyError("topology root must be a biological parenthesis node")
 
-    binary_polytomy_markers = polytomy_sizes.pop(2, 0)
-    genuine_polytomies = outer_polytomies - binary_polytomy_markers
-    biological_bifurcations = bifurcations + binary_polytomy_markers
-    biological_nodes = biological_bifurcations + genuine_polytomies
+    genuine_polytomies = sum(polytomy_sizes.values())
+    biological_nodes = bifurcations + genuine_polytomies
     return TopologyAudit(
         display_internal_nodes=display_nodes,
         biological_internal_nodes=biological_nodes,
         leaves=display_nodes + 1,
-        bifurcations=biological_bifurcations,
+        bifurcations=bifurcations,
         polytomies=genuine_polytomies,
-        polytomy_marker_groups=outer_polytomies,
-        binary_polytomy_markers=binary_polytomy_markers,
-        artificial_polytomy_nodes=brace_nodes - outer_polytomies,
+        polytomy_marker_groups=brace_groups,
+        binary_polytomy_markers=binary_brace_groups,
+        artificial_polytomy_nodes=brace_nodes,
         max_biological_node_depth=max_node_depth,
         max_biological_leaf_depth=max_leaf_depth,
         polytomy_size_histogram=dict(sorted(polytomy_sizes.items())),

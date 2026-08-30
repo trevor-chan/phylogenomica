@@ -17,6 +17,7 @@ phylogenomica-download-onezoom = "phylogenomica.data.onezoom_download:main"
 phylogenomica-extract-onezoom-docker = "phylogenomica.data.onezoom_docker:main"
 phylogenomica-ingest-onezoom = "phylogenomica.data.onezoom_ingest:main"
 phylogenomica-audit = "phylogenomica.data.audit:main"
+phylogenomica-build-tree = "phylogenomica.tree.preprocess:main"
 
 [project.optional-dependencies]
 dev = [

@@ -115,13 +115,22 @@ under a temporary name and renamed only after validation succeeds.
 Preprocessing:
 
 1. loads normalized nodes and leaves;
-2. reconstructs biological edges using the verified `real_parent` equivalent;
+2. excludes negative-`real_parent` internal display scaffolds and reconstructs
+   biological edges using `biological_parent_id`;
 3. validates roots, missing references, cycles, and reachability;
 4. constructs child adjacency;
 5. collapses single-child chains for gameplay;
 6. preserves multi-child nodes as genuine polytomies;
 7. computes ancestry, depth, and descendant statistics;
 8. identifies candidate-bearing sister groups.
+
+Tree schema version 1 implements steps 1–7 as a separate
+`biological_tree.sqlite3` artifact. Its `biological_nodes` table records direct
+parent, degree, depth, descendant-leaf count, polytomy status, and the collapsed
+parent/depth projection. `biological_leaves` records both direct and collapsed
+parents and depths. Parent indexes provide child adjacency without duplicating
+the normalized metadata tables. The source node/leaf namespaces remain
+separate.
 
 At each node on a target lineage, children that do not contain the target form
 the candidate pool for one divergence tier. Sampling several representatives

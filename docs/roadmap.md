@@ -50,12 +50,17 @@ Deliverable: a reproducible normalized local dataset plus source manifest.
 
 ## Phase 2 — Tree preprocessing
 
-- Reconstruct biological topology using the verified `real_parent` equivalent.
-- Detect roots, cycles, missing links, and unreachable records.
-- Build child adjacency and ancestry operations.
-- Collapse monotypic chains without losing optional display metadata.
-- Preserve genuine polytomies.
-- Compute descendant counts, collapsed depth, and sister-group pools.
+Status: in progress. The versioned derived tree and structural validation are
+implemented; reusable ancestry and sister-group query operations remain.
+
+- ~~Reconstruct biological topology using the verified `real_parent`
+  equivalent.~~
+- ~~Detect roots, cycles, missing links, and unreachable records.~~
+- Build reusable child-adjacency and ancestry operations.
+- ~~Collapse monotypic chains without losing source metadata.~~
+- ~~Preserve genuine polytomies.~~
+- ~~Compute descendant counts and collapsed depth.~~
+- Compute sister-group pools.
 
 Deliverable: a heavily unit-tested derived tree representation.
 
@@ -175,6 +180,6 @@ the core loop has passed data and gameplay validation.
 
 ## Immediate next action
 
-Use the normalized Docker snapshot to reconstruct and validate the biological
-tree, then run metadata and target-feasibility audits. Keep the current
-production dump request open as the release-data upgrade path.
+Add reusable ancestry and sister-group queries over the validated biological
+tree, then run target-feasibility audits. Keep the current production dump
+request open as the release-data upgrade path.

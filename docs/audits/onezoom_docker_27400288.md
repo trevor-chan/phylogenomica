@@ -56,16 +56,19 @@ bundle may be redistributed.
 |---|---:|---:|---:|
 | Leaves | 2,235,076 | 2,228,001 | -7,075 |
 | Display internal nodes | 2,235,075 | 2,228,000 | -7,075 |
-| Biological internal nodes | 328,736 | 355,429 | +26,693 |
-| Biological bifurcations | 237,540 | 265,546 | +28,006 |
-| Genuine multifurcations | 91,196 | 89,883 | -1,313 |
-| Artificial brace nodes removed | 1,906,339 | 1,872,571 | -33,768 |
+| Biological internal nodes | 201,578 | 228,574 | +26,996 |
+| Biological bifurcations | 104,142 | 130,991 | +26,849 |
+| Genuine multifurcations | 97,436 | 97,583 | +147 |
+| Artificial brace nodes removed | 2,033,497 | 1,999,426 | -34,071 |
 | Maximum biological leaf depth | 231 | 233 | +2 |
-| Largest multifurcation | 11,551 | 11,552 | +1 |
+| Largest multifurcation | 11,554 | 11,554 | 0 |
 
-The historical database and current static viewer must not be combined. The
-differences are not limited to additions or removals; inferred biological node
-counts and resolutions changed substantially.
+These corrected counts treat every negative-`real_parent` internal record as
+display scaffolding and fold its frontier into the enclosing nonnegative
+record. The historical database's direct biological child degrees exactly
+match the corrected static-bracket audit. The historical database and current
+static viewer must not be combined: the differences are not limited to
+additions or removals, and biological node counts and resolutions changed.
 
 The Docker snapshot contains dates for 15,562 internal nodes and extinction
 dates for 5 leaves.
@@ -126,8 +129,9 @@ from the verified raw snapshot. The ignored processed artifact is
 | Node rows with negative `real_parent` | 2,033,497 |
 | Leaf rows with negative `real_parent` | 18 |
 
-The build used Python 3.14.7 and SQLite 3.53.2. Its database SHA-256 is
-`f45c7e6a2514133d104a705e5bec311bbd9698f36c9a802095b3ecb23e088706`;
+The corrected ingester-version-2 build used Python 3.14.7 and SQLite 3.53.2.
+Its database SHA-256 is
+`98b6bbb69e13646bffefa15c7c5cc4920be004a26fe48e3e8645ead76f5b7ee0`;
 the exact runtime, input-manifest checksum, validation results, and reproduction
 command are retained in the local processed manifest.
 
@@ -140,3 +144,21 @@ One exported vernacular contains a literal carriage return followed by an
 escaped line feed. The ingester consequently treats only LF as a physical TSV
 record separator, then decodes reviewed MySQL batch escapes within fields. A
 regression test preserves this observed source convention.
+
+## Biological-tree preprocessing result
+
+Tree builder version 1 produced the ignored
+`tree-v1/biological_tree.sqlite3` artifact from the normalized database. It is
+113,790,976 bytes with SHA-256
+`105c30d322bbe180c44175477f4021e262e227508acaabe8c1c0e3c6c5b87c0e`.
+
+The build retained 201,578 biological internal nodes and all 2,235,076 leaves,
+while excluding 2,033,497 negative-`real_parent` display nodes. It found one
+root, no cycles, no orphan parents, no childless or unreachable biological
+nodes, and a root descendant-leaf count of 2,235,076. The derived database
+passed SQLite integrity validation and matched the corrected static topology.
+
+There are 104,142 bifurcations and 97,436 genuine polytomies. The largest has
+11,554 children. There are no monotypic biological internal nodes in this
+snapshot, so the generic chain-collapse pass removed zero nodes and preserved
+the maximum leaf depth of 231.
