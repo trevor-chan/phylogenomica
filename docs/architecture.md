@@ -50,7 +50,7 @@ validation. It consumes normalized tree and metadata interfaces.
 
 ### `phylogenomica.gameplay`
 
-Owns active candidates, guesses, reveals, scoring, stage transitions, game
+Owns active relatives, guesses, reveals, scoring, stage transitions, game
 completion, and serializable player state. It operates on an already validated
 game and does not query upstream databases.
 
@@ -102,7 +102,7 @@ OTT-keyed vernacular/image tables share normalized tables while retaining their
 source table and row ID.
 
 Derived statistics such as child IDs, descendant-leaf count, collapsed depth,
-candidate capacity, and target quality belong in later precomputed tables or
+relative capacity, and target quality belong in later precomputed tables or
 indexes. Do not mutate source records to represent collapsed gameplay topology.
 
 Each processed directory also contains a manifest with the input-manifest
@@ -133,8 +133,32 @@ the normalized metadata tables. The source node/leaf namespaces remain
 separate.
 
 At each node on a target lineage, children that do not contain the target form
-the candidate pool for one divergence tier. Sampling several representatives
+the relative pool for one divergence tier. Sampling several representatives
 from branches at the same event does not create additional tiers.
+
+### Tree query interface
+
+`phylogenomica.tree.query.BiologicalTree` opens the derived database read-only
+and keeps node and leaf references explicit because their numeric IDs overlap.
+It supports:
+
+- deterministic child and child-capacity queries;
+- direct biological or monotypic-collapsed parentage;
+- root-to-taxon lineages and node depth;
+- descendant-leaf count and deterministic leaf iteration;
+- lowest common ancestors; and
+- root-to-target candidate-bearing sister groups.
+
+A sister group contains one target-continuation branch and every off-target
+child branch at the same ancestor. Those off-target branches remain one tier
+even when the ancestor is a polytomy. Each branch carries its descendant-leaf
+count so feasibility and selection code can reason about capacity without
+enumerating every leaf. The `phylogenomica-lineage` command serializes this
+diagnostic view for an arbitrary leaf.
+
+These are topology queries, not selection policy. Metadata preferences,
+eligibility thresholds, seeded sampling, and stage allocation remain in
+`phylogenomica.generation`.
 
 ## Target eligibility
 
@@ -144,17 +168,50 @@ Eligibility is derived, versioned data rather than a hard-coded leaf list.
 TargetEligibility
 ├── target_id
 ├── usable_depth
-├── candidate_capacity
-├── terminal_group_capacity
-├── constructible_stage_count
+├── total_relative_capacity
+├── completed_transition_stages
+├── final_stage_relative_capacity
 ├── name/image/age coverage
 ├── quality score and reasons
 └── eligible
 ```
 
-Species that fail target eligibility remain selectable as candidate relatives.
+Species that fail target eligibility remain selectable as relatives.
 Eligibility policy is configuration so audit evidence can change thresholds
 without rewriting topology code.
+
+### Batch feasibility audit
+
+`phylogenomica.generation.feasibility` evaluates topology and target metadata
+without issuing a lineage query for every leaf. It propagates path state once
+per retained internal node and streams the leaf table once. This makes exact
+dataset-wide distributions practical while keeping the audit separate from the
+tree-query layer.
+
+Audit version 2 evaluates the playable-lineage model directly. For `M` stages
+of `N` members it requires one target and `M * N - 1` unique relatives. Each of
+the first `M - 1` stages assigns `N - U` decoys on shallower selected tiers and
+`U` unlock species on deeper selected tiers; `U` initially equals two. The
+ultimate stage reserves `N - 1` relatives and the target endpoint.
+
+The propagated audit state greedily assigns each nonempty ordered tier to the
+earliest unfinished role. A source tier may supply decoys or unlocks within a
+stage, but not both. Excess species and whole tiers may remain unselected. This
+earliest-role construction maximizes the suffix available to later stages and
+tests hierarchy without requiring any stage to end at a literal closest-sister
+event.
+
+The optional rich-card audit changes the species universe rather than changing
+topological correctness. It marks leaves with a scientific name, preferred
+English vernacular, and `overall_best_any` image whose URL, rights, and licence
+are nonempty. Descendant capacity is recomputed bottom-up using only those
+leaves, and both targets and off-target relative representatives are restricted
+to that set. Thus a large sister clade contributes only its actually
+presentable species, and the target is still excluded from every off-target
+capacity. With the root of life as the game root, every other included leaf
+diverges from the target at exactly one backbone tier, so total relative
+capacity is the size of the filtered universe minus one. Ordered stage
+structure—not raw total capacity—is the remaining eligibility test.
 
 ## Game and stage representation
 
@@ -169,14 +226,15 @@ Game
     ├── stage_index
     ├── start_node_id
     ├── end_node_id
-    ├── candidates[]
+    ├── relatives[]
     │   ├── species_id
     │   ├── tier_index
+    │   ├── role: decoy | unlock
     │   └── player-facing metadata reference
     ├── tiers[]
     │   ├── source_node_id
-    │   └── candidate_ids[]
-    └── terminal_tier_index
+    │   └── relative_ids[]
+    └── unlock_species_ids[]
 ```
 
 Mutable play state is separate:
@@ -184,8 +242,8 @@ Mutable play state is separate:
 ```text
 GameState
 ├── current_stage_index
-├── active_candidate_ids
-├── revealed_candidate_ids
+├── active_relative_ids
+├── revealed_relative_ids
 ├── resolved tree fragments
 ├── score and score remaining
 └── completed
@@ -196,17 +254,17 @@ sharing, persistence, and deterministic regression tests simpler.
 
 ## Generation
 
-Inputs are a target or target-selection policy, candidate count `N`, stage count
-`M`, random seed, dataset version, generator version, and quality configuration.
+Inputs are a target or target-selection policy, members per stage `N`, stage
+count `M`, unlock count `U`, random seed, dataset version, generator version,
+and quality configuration.
 
 For an eligible target, generation:
 
-1. extracts ordered candidate-bearing tiers;
+1. extracts ordered relative-bearing tiers;
 2. removes unusable tiers without inventing depth;
-3. partitions the usable lineage into approximately `M` regions;
-4. samples roughly `N` unique candidates per region;
-5. ensures each deepest visible tier is valid, preferably with multiple
-   representatives;
+3. samples `M * N - 1` unique relatives across the usable backbone;
+4. assigns decoy and unlock roles without mixing them within a selected tier;
+5. prefers small polytomies and a broad, approximately uniform depth sample;
 6. ensures every later stage lies within the target-containing continuation of
    the previous stage;
 7. validates and serializes the complete game.
@@ -217,14 +275,18 @@ stable where practical.
 
 ## Guess transition
 
-For chosen candidate `x`, compare its tier with the deepest active tier.
+For chosen relative `x`, inspect its immutable stage role.
 
-- If equal, complete the stage and incorporate its remaining structure.
-- If earlier, reveal the chosen candidate and only the information implied by
-  that tier; preserve same-tier peers and all deeper candidates as required by
-  the game rules.
+- If it is an unlock species, complete the non-ultimate stage and incorporate
+  its remaining structure.
+- If it is a decoy, reveal only the information implied by its tier; preserve
+  same-tier peers and every deeper relative as required by the game rules.
 
-The engine returns a transition describing placements, remaining candidates,
+The ultimate-stage completion action remains unresolved and must be specified
+before the gameplay engine is implemented. It does not affect lineage
+eligibility.
+
+The engine returns a transition describing placements, remaining relatives,
 score change, and completion. The frontend renders that transition and never
 recomputes it.
 
@@ -232,16 +294,18 @@ recomputes it.
 
 Every generated stage requires automated checks:
 
-- **Correct answer:** all terminal candidates have the same represented
-  relationship to the target.
+- **Unlock boundary:** exactly the configured unlock count is deeper than every
+  decoy in each non-ultimate stage.
+- **Role separation:** no selected tier contains both unlocks and decoys within
+  one stage.
 - **Ordering:** every earlier tier is strictly more distant than every later
   tier.
-- **Polytomy:** candidates sharing a tier share the relevant divergence event.
-- **Target hiding:** the target is absent from candidate cards.
+- **Polytomy:** relatives sharing a tier share the relevant divergence event.
+- **Target hiding:** the target is absent from relative cards.
 - **Duplicates:** a species is not reused unless configuration explicitly
   permits it.
 - **Continuity:** successive stages descend along one target-containing lineage.
-- **Reveal safety:** a guess never eliminates a possibly closer candidate.
+- **Reveal safety:** a guess never eliminates a possibly deeper relative.
 - **Determinism:** identical versioned inputs reproduce the same game.
 
 Tree preprocessing also needs malformed-input tests for cycles, orphans,

@@ -3,26 +3,27 @@
 ## Premise
 
 Each game has a hidden target species. The player reconstructs the evolutionary
-path toward it by repeatedly answering:
+path toward it by repeatedly identifying one of the two visible species that
+lead deepest toward the target:
 
-> Which visible species is most closely related to the hidden target?
+> Which visible species takes us closer to the hidden target?
 
 The answer is determined entirely by the phylogenetic topology represented by
 the game. Candidate images and names identify organisms; the core puzzle does
 not depend on behavioral, ecological, geographic, or morphological clues.
 
-A working game has approximately five stages of ten candidates each. These are
-configurable starting values to test against real data and player experience,
-not permanent constraints.
+A working game has approximately five stages of ten lineage members each.
+These are configurable starting values to test against real data and player
+experience, not permanent constraints.
 
 | Parameter | Initial value |
 |---|---:|
-| Candidates per stage, N | About 10 |
+| Lineage members per stage, N | About 10 |
 | Stages per game, M | About 5 |
-| Candidate presentations | About 50 |
-| Nominal maximum score | `(N - 1)M`, about 45 |
-| Hidden targets | 1 |
-| Valid terminal answers | Usually 2 or more |
+| Total lineage members | `M * N`, about 50 |
+| Unique relative species | `M * N - 1`, about 49 |
+| Hidden target species | 1 |
+| Unlock species | `2(M - 1)`, initially 8 |
 
 ## Invariants
 
@@ -34,14 +35,15 @@ mode. A future alternate mode may use them without changing this mode.
 
 ### Perfect knowledge guarantees a perfect score
 
-There is no unavoidable chance in answering a represented stage. If topology
-cannot distinguish candidates, every topologically equivalent candidate is
-accepted. The generator must never impose an arbitrary order on a polytomy.
+There is no unavoidable chance in answering a represented stage. The two
+deepest selected relative species are explicit unlock species; either advances
+the game. If topology cannot distinguish selected species, the generator must
+never impose an arbitrary order on them.
 
 ### The target starts hidden
 
 The target is both the unknown endpoint of the tree and a mystery constrained
-by each revealed relationship. It is not shown among the candidate cards and
+by each revealed relationship. It is not shown among the relative cards and
 receives no direct clues during normal play.
 
 ### One continuous tree is constructed
@@ -62,14 +64,14 @@ Life
 ### Every guess adds knowledge
 
 An incorrect choice places valid parts of the tree and narrows the active
-candidate set. The interaction rhythm is:
+relative set. The interaction rhythm is:
 
 > guess → reveal → narrow → guess → resolve → descend
 
 Scoring is framed as relationships inferred without reveal, rather than as a
 punishment count.
 
-## The target lineage
+## Playable-lineage model
 
 For target species `T`, collapse non-branching nodes and consider the genuine
 branching events from a game root toward `T`:
@@ -79,25 +81,50 @@ C0 ⊃ C1 ⊃ C2 ⊃ ... ⊃ Ck ⊃ T
 ```
 
 At every event, one child continues toward the target and one or more children
-leave that lineage. Species sampled from those off-target sister branches form
-a candidate pool at that evolutionary depth.
+leave that lineage. Species sampled from those off-target branches form the
+relative-species pool at that evolutionary depth.
+
+The **backbone** is this collapsed root-to-target path. The **playable
+lineage** is a target-relative projection containing exactly `M * N` selected
+species: one hidden target and `M * N - 1` unique relatives. It is not the full
+induced phylogeny among the selected relatives. Each relative labels a side
+branch from the backbone; intervening structure inside that off-target branch
+is contracted because the game represents only its relationship to the target.
+
+The current vocabulary is:
+
+- A **relative species** has the complete metadata required to construct its
+  card and may be selected from an off-target branch of the backbone.
+- A **target species** meets the same metadata requirement and has enough
+  ordered relative capacity to construct a valid playable lineage.
+- An **unlock species** is one of the two deepest selected relatives in a
+  non-ultimate stage. Choosing either advances to the next stage. There are
+  `2(M - 1)` unlock species.
+- A **decoy species** is any selected species that is neither the target nor an
+  unlock species. Decoys do not advance the stage or end the game. Their total
+  count is `M * N - 1 - 2(M - 1)`, initially 41.
+
+For the initial rich-card mode, complete card metadata means a scientific name,
+a preferred English vernacular name, and a selected image with nonempty URL,
+rights, and licence fields. This is a configurable presentation policy, not a
+statement about biological validity.
 
 A target is eligible only if its lineage can support a coherent game. Initial
 quality signals include:
 
-- sufficient collapsed lineage depth and candidate-bearing sister groups;
-- capacity for approximately five stages of approximately ten candidates;
+- sufficient collapsed lineage depth and relative-bearing tiers;
+- capacity for `M * N - 1` unique relatives in the requested stage shape;
 - adequate topological resolution;
-- a scientific name and reliable source identifiers;
-- preferably a vernacular name and usable, licensed image.
+- complete metadata for the target reveal.
 
 An ineligible target can still appear as a relative.
 
 ## Evolutionary depth tiers
 
-Gameplay operates on ordered divergence tiers rather than a flat candidate
-ranking. Candidates in one tier have the same relevant relationship to the
-target.
+Index the retained backbone nodes from root to target starting at zero. A
+selected relative's **tier** is the index of the backbone node where its
+off-target branch attaches after projection. Species in one tier have the same
+represented relationship to the target.
 
 ```text
 Tier 1: A
@@ -119,88 +146,111 @@ the chain. They may be retained separately as display metadata.
 ### Polytomies
 
 Genuine unresolved or multifurcating nodes remain multifurcating. Multiple
-candidates sampled at that divergence level share a tier and are topologically
+relatives sampled at that divergence level share a tier and are topologically
 equivalent relative to the target. The UI must not visually imply a false order
 among them.
 
-Guessing one non-terminal member of a polytomy places that candidate, but need
+Guessing one non-terminal member of a polytomy places that relative, but need
 not automatically place its same-tier peers. They may remain active because the
 guess established no order within their tier.
 
-### Terminal sister group
+### Stage unlock boundary
 
-The deepest visible tier is the closest visible sister group to the continuing
-target lineage. Every candidate in that tier is correct. The generator should
-provide at least two representatives in the terminal tier where possible so
-the topology, rather than one arbitrarily chosen species, defines success.
+The sister-clade terminal rule is deferred. In each non-ultimate stage, the two
+selected relatives with the deepest tiers are unlock species. They may occupy
+the same tier or two different tiers, but every unlock must be deeper than every
+decoy in that stage. A selected tier may not contain both roles within one
+stage. Unselected members of a source polytomy do not constrain the projected
+lineage.
+
+The final stage need not reach the target's literal closest biological sister
+event. Empty, metadata-poor, or simply unselected deeper source tiers may be
+skipped. The target remains the endpoint of the backbone.
 
 ## Stage construction
 
-Each stage samples several candidate-bearing tiers from a contiguous region of
-the target lineage. The candidate cards are shuffled; their tier ordering is
-never exposed directly.
+Each stage samples ordered tiers from a successive region of the target
+backbone. The cards are shuffled; their tier ordering is never exposed
+directly.
+
+For initial `M` and `N`:
+
+- each of the first `M - 1` stages contains `N - 2` decoys and two unlock
+  species; and
+- the ultimate stage contributes `N - 1` relative species followed by the
+  hidden target, producing exactly `M * N` lineage members overall.
 
 The generator should adapt to each target:
 
 1. Trace the collapsed lineage from the current game root to the target.
-2. Retain genuine branching events with viable sister-group candidates.
-3. Divide usable depth into approximately five broad regions.
-4. Select approximately ten unique candidates within each region.
-5. Ensure the deepest selected tier is a valid terminal group.
-6. Validate ordering, equivalence, uniqueness, and target hiding.
+2. Remove tiers with no valid relative cards.
+3. Select `M * N - 1` unique relatives from successive ordered tiers.
+4. Assign two deepest relatives as unlocks in each transition stage without
+   mixing unlock and decoy roles within a selected tier.
+5. End the ultimate stage at the hidden target; no closest-sister endpoint is
+   required.
+6. Validate hierarchy, role separation, uniqueness, and target hiding.
 
-When a lineage is deeper than the game needs, sample across its complete usable
-range rather than taking only broad or only recent branches. Exact uniformity
-is less important than representative traversal and good candidate quality.
+When a lineage is deeper than the game needs, sample backbone tiers across its
+usable range rather than clustering all choices near the root or target. A
+uniform seeded sample of valid branching points is the initial strategy to
+test. Exact uniformity is less important than representative traversal and
+good relative quality.
 
 This naturally creates a difficulty ramp. Early stages may contrast plants,
 arthropods, and vertebrates; later stages may distinguish neighboring families
 or genera. Whether the final stage should always reach genus level remains an
 empirical question.
 
-## Candidate selection
+## Relative selection
 
-Candidate choice balances topological validity with playability. Initial
-preferences, not hard requirements, are:
+Relative choice balances topological validity with playability. Initial
+preferences, not hard requirements beyond the configured card filter, are:
 
 1. extant and reliably identified species;
 2. usable licensed image;
 3. useful vernacular name;
 4. OneZoom popularity or another documented recognizability signal;
 5. distinctiveness and metadata completeness;
-6. no reuse within a game.
+6. small selected polytomies.
 
-Large sister groups require representative sampling. A deterministic, seeded,
-weighted sampler is sufficient initially. Some unfamiliar organisms are a
-feature, so recognizability must not become an absolute filter.
+Species are never reused within a game. Selected polytomies of two are welcome;
+groups of three or more should be avoided when alternatives provide comparable
+depth and metadata quality.
 
-## Candidate cards
+Large off-target groups require representative sampling. A deterministic,
+seeded, weighted sampler is sufficient initially. Some unfamiliar organisms
+are a feature, so recognizability must not become an absolute filter.
 
-Each candidate should show:
+## Relative cards
+
+Each relative should show:
 
 - a clear representative image;
 - a preferred vernacular name when available;
 - an italicized scientific name.
 
-If no reliable vernacular name exists, the scientific name is sufficient.
-Scientific names may themselves provide fair phylogenetic information.
+The initial rich-card mode requires all three fields. A future relaxed mode may
+allow a scientific name without a reliable vernacular; scientific names may
+themselves provide fair phylogenetic information.
 
 ## Guess and reveal rules
 
-A stage begins with all candidate cards active. If the player chooses a member
-of the deepest active tier, the stage completes. Every member of that terminal
-tier produces the same fully correct outcome.
+A non-ultimate stage begins with all relative cards active. If the player
+chooses either unlock species, the stage completes and play descends to the
+next backbone region. Unlocks are the two deepest selected species even when
+they occupy distinct tiers.
 
-If the chosen candidate is in an earlier tier:
+If the chosen species is a decoy:
 
-- the chosen candidate is placed;
-- candidates in strictly more distant tiers become placeable and may be
+- the chosen decoy is placed;
+- relatives in strictly more distant tiers become placeable and may be
   revealed;
 - unguessed peers in the selected tier may remain unresolved and active;
-- every candidate in a deeper tier remains active;
+- every relative in a deeper tier remains active;
 - the score is reduced only for information the game actually revealed.
 
-Example:
+Example with `G` and `H` designated as unlock species:
 
 ```text
 True tiers: A - B - [C,D,E] - F - [G,H]
@@ -211,14 +261,16 @@ Choose F: place the intervening structure; G H remain.
 Choose G or H: complete the stage.
 ```
 
-Reveal behavior must never remove a candidate that could still be closer to
-the target than the player's guess.
+Reveal behavior must never remove a species that could still be deeper than the
+player's guess. The precise action that resolves the ultimate stage and reveals
+the hidden target remains an explicit gameplay decision to settle before the
+engine is implemented; target eligibility does not depend on that interaction.
 
 ## Scoring
 
-The score represents candidate relationships resolved without requiring a
-reveal. A ten-candidate stage nominally offers nine scoring opportunities, so
-the initial five-stage maximum is about 45.
+The score represents relative relationships resolved without requiring a
+reveal. The earlier nominal maximum of about 45 must be recalibrated around
+decoy reveals, unlock choices, and the still-open ultimate-stage transition.
 
 The implementation must track revealed information, not merely incorrect
 clicks. One guess can expose several more-distant relationships, while guessing
@@ -255,7 +307,7 @@ mode because it tests different knowledge from the core topology puzzle.
 
 The first playable version includes extant species, OneZoom topology and
 metadata, preserved OTT identifiers, collapsed monotypic chains, genuine
-polytomies, adaptive seeded generation, the hidden target, candidate cards,
+polytomies, adaptive seeded generation, the hidden target, relative cards,
 positive scoring, and the persistent cladogram.
 
 It deliberately defers extinct species, alternate dating databases, independent
@@ -271,4 +323,6 @@ phylogenetic hypotheses.
 - How much previous tree context should remain visible while zoomed in?
 - Do images make some relationships too easy or too obscure?
 - How often do large polytomies affect play, and do players understand them?
-- Should terminal groups always contain multiple visible representatives?
+- Is accepting two unlocks at distinct depths intuitive to players?
+- What player action resolves the ultimate stage and reveals the target?
+- How strongly should selection avoid polytomies of three or more?

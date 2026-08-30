@@ -114,7 +114,7 @@ derived-data reuse terms remain the upgrade and redistribution gates.
 
 ## Normalized ingestion result
 
-On 2026-08-30, ingester version 1 built SQLite schema version 1 successfully
+On 2026-08-30, ingester version 2 built SQLite schema version 1 successfully
 from the verified raw snapshot. The ignored processed artifact is
 `data/processed/onezoom/27400288/onezoom.sqlite3`.
 
@@ -162,3 +162,66 @@ There are 104,142 bifurcations and 97,436 genuine polytomies. The largest has
 11,554 children. There are no monotypic biological internal nodes in this
 snapshot, so the generic chain-collapse pass removed zero nodes and preserved
 the maximum leaf depth of 231.
+
+## Query-layer smoke test
+
+The read-only query layer was exercised against named leaves in the normalized
+metadata. Historical leaf `887269` is `Homo sapiens`, leaf `887270` is
+`Pan troglodytes`, and leaf `889395` is `Mus musculus`.
+
+The collapsed `Homo sapiens` lineage contains 44 internal nodes and 44
+candidate-bearing sister-group tiers. Tier capacity ranges from 2 to 1,324,318
+off-target leaves. The lowest common ancestor of human and chimpanzee is node
+`887274`; the human/mouse lowest common ancestor is node `887020`. At the
+human/chimpanzee LCA, the human leaf and the internal branch containing the
+chimpanzee are returned as sibling branches. These results exercise
+lineage ordering, mixed node/leaf children, descendant capacity, and LCA over
+the full artifact; they are diagnostics rather than an eligibility decision.
+
+## Batch target-feasibility result
+
+Feasibility audit version 2 evaluates the playable-lineage definition rather
+than requiring a closest-sister endpoint. For `M=5` and `N=10`, a lineage has
+49 unique relative species and one target. Each of four transition stages has
+eight decoys on shallower selected tiers and two unlock species on deeper
+selected tiers. The ultimate stage reserves nine relatives and the target.
+
+The rich-card pass restricts both targets and relatives to leaves with a
+scientific name, preferred English name, and `overall_best_any` image whose
+URL, rights, and licence fields are nonempty. It recomputes capacity from that
+restricted universe.
+
+| Measure | Result |
+|---|---:|
+| Rich-card species considered as targets | 44,361 |
+| Targets supporting the full playable lineage | 43,381 (97.7909%) |
+| Failure: insufficient total relatives | 0 (0.0000%) |
+| Failure: fewer than 4 ordered decoy/unlock transitions | 545 (1.2286%) |
+| Failure: fewer than 9 relatives after 4 transitions | 435 (0.9806%) |
+| Total rich-card relatives available to every target | 44,360 |
+| Median usable rich-card tiers | 39 |
+| Median rich-card capacity per target-tier instance | 27 |
+
+Total capacity is constant because every non-target rich-card leaf diverges
+from the target at exactly one backbone event when the game root is the root of
+life. The only failures are therefore distribution failures: the valid species
+cannot be arranged into the requested ordered role shape. No literal closest
+sister tier is required, and source tiers or excess species may remain
+unselected.
+
+The ignored detailed result is generated with:
+
+```bash
+phylogenomica-audit-targets data/processed/onezoom/27400288 \
+  --require-rich-cards \
+  --output data/processed/onezoom/27400288/target-feasibility-v2/rich-cards.json
+```
+
+### Superseded conservative model
+
+Audit version 1 required the ultimate stage to reach the literal closest
+sister event and initially required two presentable terminal representatives.
+It retained 20,399 rich-card targets; lowering the terminal minimum to one
+retained 33,013. Those results demonstrated that closest-sister capacity, not
+overall topology, caused most exclusions. They motivated version 2 and are
+preserved here as decision evidence, not current eligibility counts.

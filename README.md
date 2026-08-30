@@ -1,10 +1,10 @@
 # Phylogenomica
 
 Phylogenomica is a phylogeny trivia and deduction game about reconstructing the
-evolutionary path to a hidden species. In each stage, the player chooses which
-visible species is most closely related to the target. Every guess reveals part
-of one persistent cladogram, and a game progressively narrows from broad
-branches of life toward the target's closest relatives.
+evolutionary path to a hidden species. In each stage, the player searches for
+one of two deeper unlock species. Every guess reveals part of one persistent
+cladogram, and a game progressively narrows from broad branches of life toward
+the hidden target.
 
 The project is currently in its data-pipeline and game-engine design phase. It
 is not playable yet. The first implementation goal is to validate the game
@@ -107,6 +107,43 @@ phylogenomica-build-tree data/processed/onezoom/27400288
 This removes only OneZoom's artificial display scaffold, validates root,
 cycles, reachability, degrees, and polytomies, and writes direct and collapsed
 parent/depth indexes under `tree-v1/`.
+
+Inspect the lineage and ordered candidate-bearing sister groups for any source
+leaf ID:
+
+```bash
+phylogenomica-lineage 887269
+```
+
+Audit every leaf against a configurable game shape:
+
+```bash
+phylogenomica-audit-targets data/processed/onezoom/27400288 \
+  --output data/processed/onezoom/27400288/target-feasibility-v2/audit.json
+```
+
+Audit version 2 constructs a playable lineage of `M * N` members: one target,
+`M * N - 1` unique relatives, and two deeper unlock species in every
+non-ultimate stage. It does not require a literal closest-sister endpoint.
+
+To require every target and relative card to have both a preferred English
+name and a complete licensed best-image record, add `--require-rich-cards`:
+
+```bash
+phylogenomica-audit-targets data/processed/onezoom/27400288 \
+  --require-rich-cards \
+  --output data/processed/onezoom/27400288/target-feasibility-v2/rich-cards.json
+```
+
+This audit retains 43,381 of 44,361 fully card-ready target species. The result
+remains an ignored, reproducible artifact; reviewed findings are recorded in
+the [Docker snapshot audit](docs/audits/onezoom_docker_27400288.md).
+
+The current implementation covers reproducible acquisition, filtered
+extraction, normalized ingestion, biological-tree reconstruction, structural
+validation, read-only topology queries, and batch target-feasibility analysis.
+The next milestone is a versioned eligibility index with explicit reason
+codes, followed by deterministic representative selection.
 
 The project is licensed under the [MIT License](LICENSE). Source datasets and
 media retain their own licenses and attribution requirements.

@@ -47,14 +47,18 @@ game engine independent of any future frontend.
 - Reconstruct biological topology from OneZoom's `real_parent`, not artificial
   display bifurcations.
 - Collapse monotypic chains and preserve genuine polytomies.
-- Accept every candidate in the deepest visible tier as correct.
-- Never reveal or eliminate a candidate that could be closer to the target.
-- Never include the hidden target among candidates.
+- Assign every selected relative to its correct target-backbone tier.
+- In each non-ultimate stage, make exactly the configured unlock count deeper
+  than every decoy; never mix unlock and decoy roles within a selected tier.
+- Do not require any stage to end at the literal closest-sister event.
+- Never reveal or eliminate a relative that could be deeper than the guess.
+- Never include the hidden target among relative cards.
 - Make generation deterministic for a dataset version, generator version,
   target, configuration, and seed.
 
-Add tests for topology, ordering, polytomies, target hiding, duplicates,
-continuity, reveal behavior, and determinism as those components are built.
+Add tests for topology, ordering, polytomies, role separation, target hiding,
+duplicates, continuity, reveal behavior, and determinism as those components
+are built.
 
 ## Local checks
 

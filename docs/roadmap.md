@@ -5,7 +5,7 @@
 The concept is well specified enough to begin engineering. The critical risk is
 no longer missing game rules; it is whether a real, legally redistributable
 OneZoom snapshot supports the assumed topology, metadata coverage, target
-depth, terminal groups, and compact clone-and-play bundle.
+depth, ordered stage roles, and compact clone-and-play bundle.
 
 The shortest path to a trustworthy prototype is therefore:
 
@@ -14,6 +14,60 @@ The shortest path to a trustworthy prototype is therefore:
 3. validate `N=10`, `M=5` feasibility;
 4. implement generation and rules without a UI;
 5. build the visual prototype only after correctness tests pass.
+
+## Implementation snapshot — 2026-08-30
+
+Completed engineering foundations:
+
+- repository, packaging, data lifecycle, and correctness documentation;
+- versioned acquisition of the current static tree and a matched historical
+  Docker database for development;
+- allowlisted, checksum-verified raw extraction;
+- streaming normalized SQLite ingestion with an atomic manifest;
+- corrected reconstruction of OneZoom biological topology from `real_parent`;
+- root, reference, cycle, reachability, degree, polytomy, and SQLite validation;
+- direct and collapsed parent/depth/descendant indexes; and
+- read-only children, ancestry, LCA, descendant, and ordered sister-group
+  queries, plus a target-lineage diagnostic command; and
+- an exact batch feasibility audit over every historical leaf, including
+  topology distributions, explicit failure categories, and metadata coverage.
+
+The historical development snapshot has 2,235,076 leaves, 201,578 biological
+internal nodes, 104,142 bifurcations, and 97,436 genuine polytomies. It has no
+monotypic biological nodes, although the generic collapse behavior is tested.
+The full normalized and derived databases remain ignored, reproducible
+intermediates rather than the eventual gameplay bundle.
+
+Feasibility audit version 2 replaces the earlier conservative closest-sister
+model with the playable-lineage definition. A default lineage contains 50
+species: 49 unique relatives and one target. Each of four transition stages
+contains eight decoys followed by two deeper unlock species; the ultimate stage
+reserves nine relatives and the target. Tiers and excess species may be skipped,
+and no stage must end at a literal closest-sister event.
+
+Of 44,361 species with a preferred English name and complete best-image record,
+43,381 (97.7909%) support this full ordered stage shape. Every target has 44,360
+total rich-card relatives, so none fail raw capacity. Only 545 fail to construct
+all four ordered decoy/unlock transitions, and 435 complete those transitions
+without leaving nine deeper relatives for the ultimate stage. The initial
+`M=5`, `N=10` shape is therefore retained for generator testing.
+
+The earlier version-1 results remain in the snapshot audit as evidence of why
+closest-sister terminal requirements were removed. They are not current target
+eligibility counts.
+
+The next implementation sequence is:
+
+1. persist the version-2 target-eligibility index and reason codes;
+2. implement deterministic relative selection using topology first and
+   documented metadata-quality preferences second;
+3. assemble and validate immutable seeded games;
+4. implement UI-independent guess, reveal, score, and stage transitions; and
+5. compact a reviewed, licensed gameplay-ready subset before frontend work.
+
+A current production dump and explicit derived-data redistribution terms remain
+parallel release gates; development continues against the matched historical
+snapshot without treating it as release data.
 
 ## Phase 0 — Repository setup
 
@@ -50,27 +104,34 @@ Deliverable: a reproducible normalized local dataset plus source manifest.
 
 ## Phase 2 — Tree preprocessing
 
-Status: in progress. The versioned derived tree and structural validation are
-implemented; reusable ancestry and sister-group query operations remain.
+Status: complete for the first derived-tree schema and query interface.
 
 - ~~Reconstruct biological topology using the verified `real_parent`
   equivalent.~~
 - ~~Detect roots, cycles, missing links, and unreachable records.~~
-- Build reusable child-adjacency and ancestry operations.
+- ~~Build reusable child-adjacency and ancestry operations.~~
 - ~~Collapse monotypic chains without losing source metadata.~~
 - ~~Preserve genuine polytomies.~~
 - ~~Compute descendant counts and collapsed depth.~~
-- Compute sister-group pools.
+- ~~Compute sister-group pools.~~
 
 Deliverable: a heavily unit-tested derived tree representation.
 
 ## Phase 3 — Dataset audit
 
+Status: in progress. Historical structural, metadata, and batch target
+feasibility results are recorded. Runtime-bundle sizing and release-source
+review remain.
+
 - ~~Implement the topology-only structural audit available from static data.~~
-- Produce structural and metadata coverage reports.
-- Calculate lineage depth and candidate capacity distributions.
-- Estimate the fraction of targets supporting `N=10`, `M=5`.
-- Quantify valid terminal groups and candidate-quality coverage.
+- ~~Produce structural and metadata coverage reports for the historical
+  development snapshot.~~
+- ~~Calculate lineage depth and candidate capacity distributions.~~
+- ~~Estimate the fraction of targets supporting `N=10`, `M=5`.~~
+- ~~Quantify valid terminal groups and candidate-quality coverage.~~
+- ~~Recompute target feasibility using only image-and-English-name candidate
+  representatives.~~
+- ~~Replace closest-sister eligibility with the playable-lineage role model.~~
 - Measure prospective runtime-bundle size and review redistribution terms.
 
 Deliverable: a committed summary report and an explicit keep/change decision on
@@ -78,27 +139,30 @@ the initial game parameters.
 
 ## Phase 4 — Target lineage and eligibility
 
-- Extract a collapsed root-to-target path.
-- Enumerate off-target sister pools as ordered divergence tiers.
+Status: in progress. Per-target topology diagnostics and aggregate feasibility
+are implemented; dataset-wide eligibility policy and indexing remain.
+
+- ~~Extract a collapsed root-to-target path.~~
+- ~~Enumerate off-target sister pools as ordered divergence tiers.~~
 - Calculate target eligibility and quality with reason codes.
-- Provide compact diagnostic output for arbitrary targets.
+- ~~Provide diagnostic output for arbitrary targets.~~
 
 Deliverable: tested target-lineage extraction and an eligible-target index.
 
 ## Phase 5 — Representative selection
 
-- Implement seeded sampling within sister groups.
+- Implement seeded sampling across ordered relative-bearing tiers.
 - Prefer complete metadata, licensed images, vernacular names, and a documented
   popularity signal without requiring recognizability.
 - Prevent target and game-level duplicates.
 - Record selection reasons for debugging.
 
-Deliverable: reproducible candidate pools for representative targets.
+Deliverable: reproducible relative pools for representative targets.
 
 ## Phase 6 — Stage and game generation
 
 - Sample stages across the full usable evolutionary depth.
-- Guarantee valid terminal tiers and stage continuity.
+- Guarantee decoy/unlock role separation and stage continuity.
 - Serialize complete immutable games with version and seed metadata.
 - Apply all generated-game validators automatically.
 
@@ -106,7 +170,7 @@ Deliverable: deterministic sample games generated from the real dataset.
 
 ## Phase 7 — Gameplay engine
 
-- Implement active candidates, tier-based guess processing, and reveals.
+- Implement active relatives, role-based guess processing, and reveals.
 - Handle polytomy peers correctly.
 - Track inferred versus revealed relationships and positive score.
 - Complete stages and the full game without UI dependencies.
@@ -117,7 +181,7 @@ transitions.
 ## Phase 8 — Minimal playable prototype
 
 - Show cards with image, common name, and scientific name.
-- Make candidates selectable and explain transition feedback.
+- Make relatives selectable and explain transition feedback.
 - Display score and an initially simple growing cladogram.
 - Run clean-clone playback using only the tracked gameplay bundle.
 
@@ -158,8 +222,8 @@ enough to ingest, and source/asset terms permit the intended use.
 
 ### After audit
 
-Decide whether `N=10`, `M=5`, multiple terminal representatives, and the
-planned candidate-quality preferences work for a sufficiently broad target set.
+Decide whether `N=10`, `M=5`, two unlock species per transition, and the
+planned relative-quality preferences work for a sufficiently broad target set.
 
 ### Before committing gameplay data
 
@@ -180,6 +244,7 @@ the core loop has passed data and gameplay validation.
 
 ## Immediate next action
 
-Add reusable ancestry and sister-group queries over the validated biological
-tree, then run target-feasibility audits. Keep the current production dump
-request open as the release-data upgrade path.
+Implement the versioned target-eligibility index and explicit reason codes,
+using the feasibility audit's topology evidence while keeping metadata quality
+separate and configurable. Keep the current production dump request open as
+the release-data upgrade path.
