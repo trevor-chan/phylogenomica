@@ -202,12 +202,34 @@ revalidated in full without the selection that produced it. A truncated,
 hand-edited, or foreign-version game is rejected at load rather than reaching
 the gameplay engine.
 
+Play a generated game without a user interface:
+
+```bash
+phylogenomica-play data/processed/onezoom/27400288/games/human-seed-42.json \
+  --guess 812045 --guess 830629 \
+  --state /tmp/player-state.json
+```
+
+With no `--guess` the command plays perfectly, choosing each stage's ending
+card immediately. Gameplay engine version 1 is a pure transition over immutable
+player state: each guess returns every placement, the remaining relatives, its
+cost and bonus, and completion flags.
+
+Scoring is reveal-weighted. A stage is worth `N`, so a perfect game scores
+`M * N`. The stage-ending card is free; any other card costs one for itself
+plus one for every still-active relative on a strictly shallower tier, since
+choosing it exposes those as more distant. A mulligan is a flat cost of one
+cancelled by its bonus, which is what makes `mulligan → unlock` tie an
+immediate unlock. Same-tier peers are never charged and never placed, so a
+polytomy never forfeits points for its unresolved members.
+
 The current implementation covers reproducible acquisition, filtered
 extraction, normalized ingestion, biological-tree reconstruction, structural
 validation, read-only topology queries, batch target-feasibility analysis, a
 versioned per-target eligibility index, deterministic seeded relative
-selection, and validated immutable game assembly. The next milestone is the
-UI-independent guess, reveal, and scoring engine.
+selection, validated immutable game assembly, and the UI-independent guess,
+reveal, and scoring engine. The next milestone is a compact, reviewed,
+licensed gameplay bundle before frontend work.
 
 The project is licensed under the [MIT License](LICENSE). Source datasets and
 media retain their own licenses and attribution requirements.

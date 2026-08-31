@@ -23,6 +23,7 @@ phylogenomica-audit-targets = "phylogenomica.generation.feasibility:main"
 phylogenomica-build-eligibility = "phylogenomica.generation.eligibility:main"
 phylogenomica-select-relatives = "phylogenomica.generation.selection:main"
 phylogenomica-generate-game = "phylogenomica.generation.game:main"
+phylogenomica-play = "phylogenomica.gameplay.engine:main"
 
 [project.optional-dependencies]
 dev = [

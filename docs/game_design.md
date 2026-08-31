@@ -298,6 +298,32 @@ one member of a polytomy need not forfeit points associated with unresolved
 same-tier members. Exact presentation of score changes will be tested with the
 prototype.
 
+### Reveal-weighted model, version 1
+
+Each stage is worth `N` points, so a perfect game scores `M * N`.
+
+- The stage-ending card costs nothing. Choosing it resolves the whole stage.
+- Any other card costs one for itself plus one for every still-active relative
+  on a strictly shallower tier, because choosing it exposes those as more
+  distant. A wrong guess deep in a stage therefore costs more than a shallow
+  one: it collapses more of the tree at once.
+- A mulligan is a flat cost of one, cancelled by its bonus. Its reveals are
+  free, which is exactly what makes `mulligan → unlock` tie an immediate
+  unlock.
+- Same-tier peers are never charged and never placed by a guess.
+
+Only decoys are ever charged, and each at most once, so a stage score never
+falls below one unlock plus one mulligan. Scores are therefore always positive
+and stage maxima are uniform across stages and games of one configuration.
+
+The engine reports banked score and the open stage's standing value separately
+so the two are never conflated, and reports each guess's cost and bonus so the
+interface can frame them. An alternative model that counts tiers rather than
+relatives was considered and rejected because it makes stage maxima vary
+between games. A per-relative model in which the player earns each relationship
+they demonstrate was also rejected: it is provably equal to counting incorrect
+clicks.
+
 ## Continuous cladogram
 
 All stage results extend one persistent cladogram. The display distinguishes:

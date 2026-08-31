@@ -80,10 +80,17 @@ than reaching a player. Serialized games round-trip exactly and revalidate on
 load without their selection, which is the interface the gameplay engine will
 consume.
 
+Gameplay engine version 1 implements guess, reveal, scoring, and stage
+transitions over a loaded game. Its scoring is reveal-weighted: a stage is
+worth `N`, the stage-ending card is free, and any other card costs itself plus
+every still-active shallower relative it exposes. Against 25 random real
+targets, perfect play and the `mulligan → stage-ending` route both score 50,
+random play always terminates with all 50 species placed, and player state
+survives a serialization round trip.
+
 The next implementation sequence is:
 
-1. implement UI-independent guess, reveal, score, and stage transitions; and
-2. compact a reviewed, licensed gameplay-ready subset before frontend work.
+1. compact a reviewed, licensed gameplay-ready subset before frontend work.
 
 A current production dump and explicit derived-data redistribution terms remain
 parallel release gates; development continues against the matched historical
@@ -197,10 +204,12 @@ Deliverable: deterministic sample games generated from the real dataset.
 
 ## Phase 7 — Gameplay engine
 
-- Implement active relatives, role-based guess processing, and reveals.
-- Handle polytomy peers correctly.
-- Track inferred versus revealed relationships and positive score.
-- Complete stages and the full game without UI dependencies.
+Status: complete for the first engine and the reveal-weighted scoring model.
+
+- ~~Implement active relatives, role-based guess processing, and reveals.~~
+- ~~Handle polytomy peers correctly.~~
+- ~~Track inferred versus revealed relationships and positive score.~~
+- ~~Complete stages and the full game without UI dependencies.~~
 
 Deliverable: command-line or test-driven complete games with correct state
 transitions.
@@ -272,7 +281,7 @@ the core loop has passed data and gameplay validation.
 
 ## Immediate next action
 
-Implement the UI-independent gameplay engine over the generated game: active
-relatives, role-based guess processing, polytomy-safe reveals, mulligan
-scoring, stage transitions, and serializable player state. Keep the current
+Measure the prospective runtime-bundle size and compact a reviewed, licensed
+gameplay-ready subset under `data/gameplay/` and `assets/gameplay/`, so a clean
+clone can generate and play without the ignored intermediates. Keep the current
 production dump request open as the release-data upgrade path.

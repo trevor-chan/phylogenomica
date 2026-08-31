@@ -54,6 +54,14 @@ Owns active relatives, guesses, reveals, scoring, stage transitions, game
 completion, and serializable player state. It operates on an already validated
 game and does not query upstream databases.
 
+Gameplay engine version 1 is a pure transition function over immutable state:
+`apply_guess(game, state, species_id)` returns the next `GameState` and a
+`GuessOutcome` carrying every placement, the remaining relatives, the cost and
+bonus, banked score, the open stage's standing value, and completion flags. The
+engine does not revalidate the game; it consumes one already checked by
+`validate_game_structure`. `restore_state` rebuilds player state and confirms
+it is a reachable position in that specific game.
+
 Developer scripts in `scripts/` call these modules but contain no reusable
 business logic. A future API and frontend should be separate layers rather than
 new responsibilities inside the engine.
