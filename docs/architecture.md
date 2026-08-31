@@ -290,9 +290,30 @@ For an eligible target, generation:
    the previous stage;
 7. validates and serializes the complete game.
 
+Relative selector version 1 implements steps 1–5 as an immutable intermediate
+selection. The tree layer batch-maps the eligibility index's compact candidate
+universe to lowest-common-ancestor tiers without scanning every source leaf.
+The selector then uses dynamic programming to count feasible continuations and
+samples an ordered allocation from the minimum-polytomy-penalty solutions.
+Selected groups of one or two at a tier have no penalty; larger selected
+polytomies are used only when the requested game shape requires them.
+
+After tier allocation, representatives are sampled without replacement. All
+rich-card candidates remain possible, while decile-bucketed OneZoom popularity
+rank supplies a moderate, nonzero soft weight. This keeps metadata quality
+subordinate to topology and avoids turning recognizability into an eligibility
+rule. The output contains 49 role-assigned relatives; the global target supplies
+the tenth member of the ultimate stage during game assembly.
+
 Randomness comes only from an explicit local generator. Given identical data,
 generator version, target, configuration, and seed, output bytes should be
 stable where practical.
+
+The selector derives its local random state from a canonical SHA-256 record of
+dataset version, selector version, target, complete feasibility configuration,
+and user seed. It never uses global random state. Changing the seed can change
+both feasible tier allocation and representatives, so one target can support a
+large combinatorial family of games.
 
 ## Guess transition
 

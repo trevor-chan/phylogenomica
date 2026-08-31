@@ -155,11 +155,29 @@ index contains 44,361 candidates, of which 43,032 are eligible, and occupies
 3,055,616 bytes. Source leaves excluded by the card policy are summarized in
 the manifest rather than inflating the generator-facing database.
 
+Select a valid relative lineage for an eligible target and explicit seed:
+
+```bash
+phylogenomica-select-relatives 887269 \
+  --seed 42 \
+  --normalized-dir data/processed/onezoom/27400288 \
+  --output data/processed/onezoom/27400288/selections/human-seed-42.json
+```
+
+Relative selector version 1 maps every metadata-valid candidate to its correct
+target-backbone tier, samples only feasible ordered stage layouts, minimizes
+large selected polytomies, and uses OneZoom popularity rank as a soft weighted
+preference. The dataset version, selector version, target, full configuration,
+and seed determine the result. The same inputs reproduce identical JSON, while
+different seeds can change both selected tiers and representative species for
+the same target.
+
 The current implementation covers reproducible acquisition, filtered
 extraction, normalized ingestion, biological-tree reconstruction, structural
-validation, read-only topology queries, batch target-feasibility analysis, and
-a versioned per-target eligibility index. The next milestone is deterministic
-representative selection across the indexed targets' ordered lineage tiers.
+validation, read-only topology queries, batch target-feasibility analysis, a
+versioned per-target eligibility index, and deterministic seeded relative
+selection. The next milestone is assembling and validating complete immutable
+games from these selections.
 
 The project is licensed under the [MIT License](LICENSE). Source datasets and
 media retain their own licenses and attribution requirements.

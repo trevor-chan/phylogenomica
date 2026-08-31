@@ -229,9 +229,14 @@ Species are never reused within a game. Selected polytomies of two are welcome;
 groups of three or more should be avoided when alternatives provide comparable
 depth and metadata quality.
 
-Large off-target groups require representative sampling. A deterministic,
-seeded, weighted sampler is sufficient initially. Some unfamiliar organisms
-are a feature, so recognizability must not become an absolute filter.
+Large off-target groups require representative sampling. The initial selector
+uses a local deterministic seed to vary both valid tier allocation and species
+choice. It minimizes selected same-tier groups larger than two before sampling
+among valid layouts, then gives popularity a moderate nonzero weight. Every
+metadata-valid species remains possible; unfamiliar organisms are a feature,
+so recognizability is not an absolute filter. Identical versioned inputs and a
+seed reproduce the same selection, while different seeds can produce different
+games for one target.
 
 ## Relative cards
 

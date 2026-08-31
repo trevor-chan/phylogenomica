@@ -64,6 +64,15 @@ class SisterGroup:
         return sum(branch.descendant_leaf_count for branch in self.sister_branches)
 
 
+@dataclass(frozen=True)
+class RelativeTier:
+    """Candidate leaves sharing one attachment point on a target lineage."""
+
+    tier_index: int
+    ancestor_node_id: int
+    candidate_leaf_ids: tuple[int, ...]
+
+
 class BiologicalTree:
     """Query a validated tree without mutating its SQLite artifact."""
 
@@ -374,6 +383,101 @@ class BiologicalTree:
                 )
             target_branch = TaxonRef("node", ancestor)
         return tuple(reversed(groups_from_target))
+
+    def relative_tiers(
+        self,
+        target_leaf_id: int,
+        candidate_leaf_ids: Sequence[int],
+        *,
+        topology: Topology = "collapsed",
+    ) -> tuple[RelativeTier, ...]:
+        """Group candidate leaves by their target-lineage attachment tier.
+
+        Candidates are mapped by their lowest common ancestor with the target.
+        Loading only the internal-node parent map avoids enumerating every
+        source leaf when the candidate universe is a compact metadata subset.
+        """
+        self._validate_topology(topology)
+        target = TaxonRef("leaf", target_leaf_id)
+        self._validate_ref(target, topology)
+        candidates = tuple(int(candidate_id) for candidate_id in candidate_leaf_ids)
+        if len(candidates) != len(set(candidates)):
+            raise TreeQueryError("candidate leaf IDs must be unique")
+        if target_leaf_id in candidates:
+            raise TreeQueryError("target leaf cannot be a relative candidate")
+        if not candidates:
+            return ()
+
+        if topology == "collapsed":
+            parent_column = "collapsed_parent_node_id"
+            retained_clause = "WHERE retained_after_collapse = 1"
+        else:
+            parent_column = "parent_node_id"
+            retained_clause = ""
+        parent_by_node = {
+            int(node_id): None if parent_id is None else int(parent_id)
+            for node_id, parent_id in self._connection.execute(
+                f"SELECT node_id, {parent_column} FROM biological_nodes "
+                f"{retained_clause}"
+            )
+        }
+        lineage = self.lineage_node_ids(target, topology=topology)
+        tier_by_node = {node_id: index for index, node_id in enumerate(lineage)}
+
+        parent_by_leaf: dict[int, int] = {}
+        ordered_candidates = sorted(candidates)
+        query_batch_size = 900
+        for offset in range(0, len(ordered_candidates), query_batch_size):
+            batch = ordered_candidates[offset : offset + query_batch_size]
+            placeholders = ",".join("?" for _ in batch)
+            parent_by_leaf.update(
+                {
+                    int(leaf_id): int(parent_id)
+                    for leaf_id, parent_id in self._connection.execute(
+                        f"SELECT leaf_id, {parent_column} FROM biological_leaves "
+                        f"WHERE leaf_id IN ({placeholders})",
+                        batch,
+                    )
+                }
+            )
+        missing = sorted(set(candidates) - parent_by_leaf.keys())
+        if missing:
+            raise TreeQueryError(f"unknown candidate leaf IDs: {missing[:5]!r}")
+
+        candidates_by_tier: dict[int, list[int]] = {}
+        ancestor_by_tier: dict[int, int] = {}
+        for candidate_id in ordered_candidates:
+            ancestor = parent_by_leaf[candidate_id]
+            visited: set[int] = set()
+            while ancestor not in tier_by_node:
+                if ancestor in visited:
+                    raise TreeQueryError(
+                        f"cycle encountered above candidate leaf {candidate_id}"
+                    )
+                visited.add(ancestor)
+                try:
+                    parent = parent_by_node[ancestor]
+                except KeyError as error:
+                    raise TreeQueryError(
+                        f"candidate leaf {candidate_id} has unknown ancestor {ancestor}"
+                    ) from error
+                if parent is None:
+                    raise TreeQueryError(
+                        f"candidate leaf {candidate_id} does not meet target lineage"
+                    )
+                ancestor = parent
+            tier_index = tier_by_node[ancestor]
+            ancestor_by_tier[tier_index] = ancestor
+            candidates_by_tier.setdefault(tier_index, []).append(candidate_id)
+
+        return tuple(
+            RelativeTier(
+                tier_index=tier_index,
+                ancestor_node_id=ancestor_by_tier[tier_index],
+                candidate_leaf_ids=tuple(candidates_by_tier[tier_index]),
+            )
+            for tier_index in sorted(candidates_by_tier)
+        )
 
 
 def _render_group(group: SisterGroup) -> dict[str, object]:

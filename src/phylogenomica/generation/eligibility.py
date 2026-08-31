@@ -516,6 +516,19 @@ class TargetEligibilityIndex:
             raise TargetEligibilityError(
                 f"unsupported eligibility schema: {version!r}"
             )
+        self._metadata = {
+            str(key): str(value)
+            for key, value in self._connection.execute(
+                "SELECT key, value FROM dataset_metadata"
+            )
+        }
+        if self._metadata.get("eligibility_index_version") != str(
+            ELIGIBILITY_INDEX_VERSION
+        ):
+            self.close()
+            raise TargetEligibilityError(
+                "unsupported or missing eligibility index version"
+            )
 
     def close(self) -> None:
         self._connection.close()
@@ -525,6 +538,29 @@ class TargetEligibilityIndex:
 
     def __exit__(self, *args: object) -> None:
         self.close()
+
+    @property
+    def dataset_version(self) -> str:
+        try:
+            return self._metadata["dataset_version"]
+        except KeyError as error:
+            raise TargetEligibilityError(
+                "eligibility index has no dataset version"
+            ) from error
+
+    @property
+    def feasibility_configuration(self) -> dict[str, int | bool]:
+        try:
+            value = json.loads(self._metadata["feasibility_configuration"])
+        except (KeyError, json.JSONDecodeError) as error:
+            raise TargetEligibilityError(
+                "eligibility index has invalid feasibility configuration"
+            ) from error
+        if not isinstance(value, dict):
+            raise TargetEligibilityError(
+                "eligibility index has invalid feasibility configuration"
+            )
+        return value
 
     def get(self, target_id: int) -> TargetEvaluation | None:
         row = self._connection.execute(
@@ -570,6 +606,14 @@ class TargetEligibilityIndex:
         rows = self._connection.execute(
             "SELECT target_id FROM target_eligibility "
             "WHERE eligible = 1 ORDER BY target_id"
+        )
+        for (target_id,) in rows:
+            yield int(target_id)
+
+    def iter_indexed_target_ids(self) -> Iterator[int]:
+        """Yield the complete configured target/relative card universe."""
+        rows = self._connection.execute(
+            "SELECT target_id FROM target_eligibility ORDER BY target_id"
         )
         for (target_id,) in rows:
             yield int(target_id)

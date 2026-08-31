@@ -33,7 +33,9 @@ Completed engineering foundations:
   topology distributions, explicit failure categories, and metadata coverage;
   and
 - a deterministic, manifest-backed target-eligibility index with a read-only
-  query interface.
+  query interface; and
+- a validated, deterministic seeded relative selector that varies tier layouts
+  and species representatives per target.
 
 The historical development snapshot has 2,235,076 leaves, 201,578 biological
 internal nodes, 104,142 bifurcations, and 97,436 genuine polytomies. It has no
@@ -69,11 +71,9 @@ generator-facing rows.
 
 The next implementation sequence is:
 
-1. implement deterministic relative selection using topology first and
-   documented metadata-quality preferences second;
-2. assemble and validate immutable seeded games;
-3. implement UI-independent guess, reveal, score, and stage transitions; and
-4. compact a reviewed, licensed gameplay-ready subset before frontend work.
+1. assemble and validate immutable seeded games from relative selections;
+2. implement UI-independent guess, reveal, score, and stage transitions; and
+3. compact a reviewed, licensed gameplay-ready subset before frontend work.
 
 A current production dump and explicit derived-data redistribution terms remain
 parallel release gates; development continues against the matched historical
@@ -161,11 +161,14 @@ Deliverable: tested target-lineage extraction and an eligible-target index.
 
 ## Phase 5 — Representative selection
 
-- Implement seeded sampling across ordered relative-bearing tiers.
-- Prefer complete metadata, licensed images, vernacular names, and a documented
-  popularity signal without requiring recognizability.
-- Prevent target and game-level duplicates.
-- Record selection reasons for debugging.
+Status: complete for the initial selector.
+
+- ~~Implement seeded sampling across ordered relative-bearing tiers.~~
+- ~~Prefer complete metadata, licensed images, vernacular names, and a
+  documented popularity signal without requiring recognizability.~~
+- ~~Prevent target and game-level duplicates.~~
+- ~~Record selected tiers, roles, versions, configuration, target, and seed for
+  debugging and replay.~~
 
 Deliverable: reproducible relative pools for representative targets.
 
@@ -255,7 +258,7 @@ the core loop has passed data and gameplay validation.
 
 ## Immediate next action
 
-Implement deterministic relative selection for one indexed target, using
-ordered topology tiers first and documented metadata-quality preferences
-second. Keep the current production dump request open as the release-data
-upgrade path.
+Assemble the seeded relative selection into a complete immutable game object,
+including the visible final-stage target, player-facing card metadata, shuffled
+card order, and automatic generated-game validators. Keep the current
+production dump request open as the release-data upgrade path.

@@ -1,4 +1,5 @@
 import json
+import random
 import sqlite3
 from collections import Counter
 from pathlib import Path
@@ -20,7 +21,13 @@ from phylogenomica.generation.feasibility import (
     audit_target_feasibility,
     summarize_distribution,
 )
+from phylogenomica.generation.selection import (
+    RelativeSelectionError,
+    _allocate_tiers,
+    select_relatives,
+)
 from phylogenomica.tree.preprocess import _create_tree_database, analyze_parent_graph
+from phylogenomica.tree.query import RelativeTier
 
 
 def test_validates_feasibility_configuration() -> None:
@@ -126,7 +133,8 @@ def _write_normalized_database(path: Path) -> None:
         CREATE TABLE leaves (
             leaf_id INTEGER PRIMARY KEY,
             scientific_name TEXT,
-            ott_id INTEGER
+            ott_id INTEGER,
+            popularity_rank INTEGER
         );
         CREATE TABLE vernacular_names (
             subject_type TEXT,
@@ -150,13 +158,13 @@ def _write_normalized_database(path: Path) -> None:
         "INSERT INTO dataset_metadata VALUES ('dataset_version', 'test-1')"
     )
     connection.executemany(
-        "INSERT INTO leaves VALUES (?, ?, ?)",
+        "INSERT INTO leaves VALUES (?, ?, ?, ?)",
         (
-            (1, "Alpha one", 101),
-            (2, "Alpha two", 102),
-            (3, "Beta one", 103),
-            (4, "Beta two", 104),
-            (5, "Beta three", 105),
+            (1, "Alpha one", 101, 1),
+            (2, "Alpha two", 102, 2),
+            (3, "Beta one", 103, 3),
+            (4, "Beta two", 104, 4),
+            (5, "Beta three", 105, 5),
         ),
     )
     connection.execute(
@@ -423,4 +431,126 @@ def test_refuses_to_overwrite_target_eligibility_index(tmp_path: Path) -> None:
                 stages_per_game=1,
                 require_rich_card_metadata=True,
             ),
+        )
+
+
+def test_allocates_ordered_roles_across_transition_and_ultimate_stages() -> None:
+    config = FeasibilityConfig(members_per_stage=4, stages_per_game=2)
+    tiers = tuple(
+        RelativeTier(
+            tier_index=index,
+            ancestor_node_id=100 + index,
+            candidate_leaf_ids=tuple(
+                1_000 + index * 10 + candidate for candidate in range(5)
+            ),
+        )
+        for index in range(10)
+    )
+
+    uses = _allocate_tiers(tiers, config=config, rng=random.Random(7))
+
+    selected_by_stage = Counter()
+    for use in uses:
+        selected_by_stage[use.stage_index] += use.selected_count
+    roles_by_stage = {
+        stage: Counter(
+            {
+                role: sum(
+                    use.selected_count
+                    for use in uses
+                    if use.stage_index == stage and use.role == role
+                )
+                for role in ("decoy", "mulligan", "unlock")
+            }
+        )
+        for stage in range(2)
+    }
+    assert selected_by_stage == Counter({0: 4, 1: 3})
+    assert roles_by_stage == {
+        0: Counter({"decoy": 2, "mulligan": 1, "unlock": 1}),
+        1: Counter({"decoy": 2, "mulligan": 1}),
+    }
+    assert [use.tier.tier_index for use in uses] == sorted(
+        use.tier.tier_index for use in uses
+    )
+    assert all(use.selected_count <= 2 for use in uses if use.role == "decoy")
+
+
+def test_selects_reproducible_relatives_and_varies_them_by_seed(
+    tmp_path: Path,
+) -> None:
+    normalized_dir = tmp_path / "processed"
+    _write_eligibility_sources(normalized_dir)
+    config = FeasibilityConfig(
+        members_per_stage=3,
+        stages_per_game=1,
+        require_rich_card_metadata=True,
+    )
+    build_target_eligibility_index(
+        normalized_dir=normalized_dir,
+        config=config,
+    )
+    paths = {
+        "normalized_database": normalized_dir / "onezoom.sqlite3",
+        "tree_database": normalized_dir
+        / "tree-v1"
+        / "biological_tree.sqlite3",
+        "eligibility_database": normalized_dir
+        / "target-eligibility-v1"
+        / ELIGIBILITY_DATABASE_FILENAME,
+    }
+
+    first = select_relatives(target_id=3, seed=11, config=config, **paths)
+    repeated = select_relatives(target_id=3, seed=11, config=config, **paths)
+
+    assert first == repeated
+    assert first.target_id == 3
+    assert len(first.relative_species_ids) == 2
+    assert 3 not in first.relative_species_ids
+    assert Counter(
+        relative.role for relative in first.stages[0].relatives
+    ) == Counter({"decoy": 1, "mulligan": 1})
+
+    seeded_species_sets = {
+        select_relatives(
+            target_id=3, seed=seed, config=config, **paths
+        ).relative_species_ids
+        for seed in range(20)
+    }
+    assert len(seeded_species_sets) > 1
+
+
+def test_relative_selection_rejects_ineligible_target_or_policy(
+    tmp_path: Path,
+) -> None:
+    normalized_dir = tmp_path / "processed"
+    _write_eligibility_sources(normalized_dir)
+    config = FeasibilityConfig(
+        members_per_stage=3,
+        stages_per_game=1,
+        require_rich_card_metadata=True,
+    )
+    build_target_eligibility_index(normalized_dir=normalized_dir, config=config)
+    paths = {
+        "normalized_database": normalized_dir / "onezoom.sqlite3",
+        "tree_database": normalized_dir
+        / "tree-v1"
+        / "biological_tree.sqlite3",
+        "eligibility_database": normalized_dir
+        / "target-eligibility-v1"
+        / ELIGIBILITY_DATABASE_FILENAME,
+    }
+
+    with pytest.raises(RelativeSelectionError, match="ineligible"):
+        select_relatives(target_id=1, seed=0, config=config, **paths)
+    with pytest.raises(RelativeSelectionError, match="configuration"):
+        select_relatives(
+            target_id=3,
+            seed=0,
+            config=FeasibilityConfig(
+                members_per_stage=4,
+                stages_per_game=1,
+                require_rich_card_metadata=True,
+            ),
+            **paths,
         )

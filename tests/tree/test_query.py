@@ -108,6 +108,30 @@ def test_groups_all_polytomy_peers_into_one_sister_tier(
     ]
 
 
+def test_groups_filtered_relative_candidates_by_target_tier(
+    tree_database: Path,
+) -> None:
+    with BiologicalTree.open(tree_database) as tree:
+        tiers = tree.relative_tiers(1, (2, 3, 4, 5))
+
+    assert [(tier.tier_index, tier.ancestor_node_id) for tier in tiers] == [
+        (0, 1),
+        (1, 3),
+    ]
+    assert tiers[0].candidate_leaf_ids == (3, 4, 5)
+    assert tiers[1].candidate_leaf_ids == (2,)
+
+
+def test_rejects_invalid_relative_candidate_sets(tree_database: Path) -> None:
+    with BiologicalTree.open(tree_database) as tree:
+        with pytest.raises(TreeQueryError, match="unique"):
+            tree.relative_tiers(1, (2, 2))
+        with pytest.raises(TreeQueryError, match="cannot be a relative"):
+            tree.relative_tiers(1, (1, 2))
+        with pytest.raises(TreeQueryError, match="unknown candidate"):
+            tree.relative_tiers(1, (99,))
+
+
 def test_direct_sister_groups_skip_non_candidate_monotypic_event(
     tree_database: Path,
 ) -> None:

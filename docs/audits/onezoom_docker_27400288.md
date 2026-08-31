@@ -248,6 +248,16 @@ Its manifest pins the feasibility configuration, schema and algorithm versions,
 normalized/tree input checksums, reason definitions and counts, integrity
 validation, output checksum, and reproduction command.
 
+### Seeded relative-selection smoke test
+
+Relative selector version 1 successfully generated the default 49-relative,
+five-stage selection for both target `143699` and `Homo sapiens` (`887269`). Two
+independent human/seed-42 runs produced byte-identical JSON. For target `143699`,
+seeds 0 and 1 produced different valid tier layouts and relative sets: only 17
+of their 49 selected relative species overlapped. This confirms that the seed
+expands one eligible target into multiple reproducible game inputs rather than
+serving only as a target-selection seed.
+
 ### Superseded models
 
 Audit version 1 required the ultimate stage to reach the literal closest
