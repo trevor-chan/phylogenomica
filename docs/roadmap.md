@@ -88,9 +88,17 @@ targets, perfect play and the `mulligan → stage-ending` route both score 50,
 random play always terminates with all 50 species placed, and player state
 survives a serialization round trip.
 
+A local browser prototype now plays a generated game end to end. The page is a
+renderer: every guess is resolved by the engine over a small JSON API, which is
+stage-scoped so a card's tier and role reach the browser only once it has been
+placed. Playing the historical snapshot surfaced one material data finding —
+the stored `media.eol.org` image URLs now answer with a Cloudflare
+interstitial, so cards render without images.
+
 The next implementation sequence is:
 
-1. compact a reviewed, licensed gameplay-ready subset before frontend work.
+1. resolve and cache licensed media so cards can show images again; and
+2. compact a reviewed, licensed gameplay-ready subset before frontend work.
 
 A current production dump and explicit derived-data redistribution terms remain
 parallel release gates; development continues against the matched historical
@@ -216,10 +224,16 @@ transitions.
 
 ## Phase 8 — Minimal playable prototype
 
-- Show cards with image, common name, and scientific name.
-- Make relatives selectable and explain transition feedback.
-- Display score and an initially simple growing cladogram.
-- Run clean-clone playback using only the tracked gameplay bundle.
+Status: playable. Clean-clone playback is blocked on the gameplay bundle.
+
+- ~~Show cards with common and scientific name.~~ Images are shown when they
+  load, but the snapshot's stored URLs are no longer retrievable; see
+  [data sources](data_sources.md). Cards fall back to a placeholder glyph.
+- ~~Make relatives selectable and explain transition feedback.~~
+- ~~Display score and an initially simple growing cladogram.~~
+- Run clean-clone playback using only the tracked gameplay bundle. Blocked:
+  the bundle does not exist yet, so the prototype still reads the ignored
+  processed dataset or a serialized game.
 
 Deliverable: a functional prototype for evaluating the core mechanic.
 
@@ -281,7 +295,11 @@ the core loop has passed data and gameplay validation.
 
 ## Immediate next action
 
-Measure the prospective runtime-bundle size and compact a reviewed, licensed
-gameplay-ready subset under `data/gameplay/` and `assets/gameplay/`, so a clean
-clone can generate and play without the ignored intermediates. Keep the current
-production dump request open as the release-data upgrade path.
+Restore card images by resolving `wikidata_id` to Wikimedia Commons media with
+its own attribution and license fields, then cache the results under
+`assets/gameplay/`. Hotlinking a third-party media host is not an acceptable
+runtime dependency in any case, so this is bundle work rather than a detour.
+Then measure the prospective runtime-bundle size and compact a reviewed,
+licensed subset under `data/gameplay/`, so a clean clone can play without the
+ignored intermediates. Keep the current production dump request open as the
+release-data upgrade path.

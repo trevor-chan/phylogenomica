@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phylogenomica</title>
+<style>
+  :root {
+    --bg: #10141a; --panel: #171d26; --line: #263041; --ink: #e7ecf3;
+    --muted: #8f9cb0; --accent: #6ea8fe; --good: #58c98a; --warn: #e0a458;
+    --dead: #4a5568;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f4f6f9; --panel: #ffffff; --line: #dbe1ea; --ink: #16202e;
+      --muted: #5d6b7f; --accent: #2c6fd1; --good: #1f8a55; --warn: #a2640f;
+      --dead: #aab4c2;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header {
+    display: flex; flex-wrap: wrap; gap: 1rem 2rem; align-items: baseline;
+    padding: .9rem 1.25rem; border-bottom: 1px solid var(--line);
+    background: var(--panel); position: sticky; top: 0; z-index: 5;
+  }
+  h1 { font-size: 1rem; margin: 0; letter-spacing: .08em; text-transform: uppercase; }
+  h1 span { color: var(--muted); font-weight: 400; letter-spacing: 0; text-transform: none; }
+  .stats { display: flex; gap: 1.5rem; margin-left: auto; }
+  .stat { text-align: right; }
+  .stat b { display: block; font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+  .stat small { color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; }
+  main { display: grid; grid-template-columns: minmax(0,1fr) 22rem; gap: 1.25rem; padding: 1.25rem; align-items: start; }
+  @media (max-width: 62rem) { main { grid-template-columns: minmax(0,1fr); } }
+  .prompt { margin: 0 0 .85rem; color: var(--muted); }
+  .prompt b { color: var(--ink); }
+  #feedback {
+    min-height: 1.4rem; margin: 0 0 .85rem; padding: .55rem .8rem;
+    border-radius: .5rem; border: 1px solid var(--line); background: var(--panel);
+    font-variant-numeric: tabular-nums;
+  }
+  #feedback.good { border-color: var(--good); }
+  #feedback.cost { border-color: var(--warn); }
+  #cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: .8rem; }
+  .card {
+    border: 1px solid var(--line); border-radius: .6rem; background: var(--panel);
+    overflow: hidden; text-align: left; padding: 0; color: inherit; font: inherit;
+    cursor: pointer; display: flex; flex-direction: column; transition: border-color .12s, transform .12s;
+  }
+  .card:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-2px); }
+  .card:disabled { cursor: default; opacity: .55; }
+  .thumb {
+    aspect-ratio: 4 / 3; background: linear-gradient(160deg, var(--line), var(--panel));
+    display: grid; place-items: center; position: relative;
+  }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb .glyph { font-size: 1.6rem; color: var(--muted); }
+  .body { padding: .55rem .65rem .65rem; }
+  .en { font-weight: 600; line-height: 1.25; }
+  .sci { font-style: italic; color: var(--muted); font-size: .85rem; margin-top: .15rem; }
+  .badge {
+    position: absolute; top: .4rem; left: .4rem; padding: .1rem .45rem;
+    border-radius: 1rem; font-size: .68rem; letter-spacing: .04em;
+    background: var(--bg); border: 1px solid var(--line); color: var(--muted);
+  }
+  .card[data-role="mulligan"] .badge { color: var(--warn); border-color: var(--warn); }
+  .card[data-role="unlock"] .badge, .card[data-role="target"] .badge { color: var(--good); border-color: var(--good); }
+  aside {
+    border: 1px solid var(--line); border-radius: .6rem; background: var(--panel);
+    padding: .9rem 1rem; position: sticky; top: 4.4rem;
+    max-height: calc(100vh - 6rem); overflow-y: auto;
+  }
+  aside h2 { font-size: .75rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 .6rem; }
+  .tree { font-size: .85rem; }
+  /* One spine per stage at a constant indent: a game places twenty-odd tiers,
+     and nesting each one would run the panel off the screen by the last stage. */
+  .spine { border-left: 2px solid var(--accent); margin-left: .3rem; padding-left: .75rem; }
+  .rung { padding: .1rem 0 .35rem; }
+  .tier { color: var(--muted); font-size: .68rem; letter-spacing: .05em; text-transform: uppercase; }
+  .leaf { margin: .06rem 0; line-height: 1.3; }
+  .leaf i { color: var(--muted); }
+  .leaf.guessed::before { content: "●"; color: var(--accent); margin-right: .35rem; }
+  .leaf.revealed::before { content: "○"; color: var(--dead); margin-right: .35rem; }
+  .leaf.target { font-weight: 600; }
+  .leaf.target::before { content: "◆"; color: var(--good); margin-right: .35rem; }
+  .unknown { color: var(--muted); font-style: italic; padding: .2rem 0 .2rem 1.05rem; }
+  .stagehead { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: .7rem 0 .25rem; }
+  .stagehead:first-child { margin-top: 0; }
+  footer { padding: 0 1.25rem 2rem; color: var(--muted); font-size: .78rem; }
+  button.again {
+    margin-top: .8rem; padding: .45rem .9rem; border-radius: .4rem; cursor: pointer;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit;
+  }
+  .attrib { font-size: .68rem; color: var(--muted); margin-top: .3rem; line-height: 1.3; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Phylogenomica <span id="stage"></span></h1>
+  <div class="stats">
+    <div class="stat"><b id="score">0</b><small>banked</small></div>
+    <div class="stat"><b id="stake">0</b><small>at stake</small></div>
+    <div class="stat"><b id="best">0</b><small>best possible</small></div>
+  </div>
+</header>
+
+<main>
+  <section>
+    <p class="prompt" id="prompt"><b>Which species takes us closer to the target?</b></p>
+    <p id="feedback">Pick the card whose most recent common ancestor with the hidden target is the newest.</p>
+    <div id="cards"></div>
+  </section>
+  <aside>
+    <h2>Cladogram</h2>
+    <div class="tree" id="tree"></div>
+  </aside>
+</main>
+<footer id="foot"></footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let busy = false;
+
+function cardNode(card) {
+  const el = document.createElement("button");
+  el.className = "card";
+  el.disabled = card.state !== "active" || busy;
+  if (card.role) el.dataset.role = card.role;
+
+  const thumb = document.createElement("div");
+  thumb.className = "thumb";
+  const img = document.createElement("img");
+  img.loading = "lazy";
+  img.alt = "";
+  img.src = card.image_url;
+  // The 2022 snapshot's media host now refuses hotlinked requests, so fall
+  // back to a glyph rather than showing a broken image.
+  img.onerror = () => {
+    thumb.innerHTML = '<span class="glyph">🧬</span>';
+    if (card.role) addBadge(thumb, card);
+  };
+  thumb.appendChild(img);
+  if (card.role) addBadge(thumb, card);
+
+  const body = document.createElement("div");
+  body.className = "body";
+  const en = document.createElement("div");
+  en.className = "en";
+  en.textContent = card.english_name;
+  const sci = document.createElement("div");
+  sci.className = "sci";
+  sci.textContent = card.scientific_name;
+  body.append(en, sci);
+
+  el.append(thumb, body);
+  if (card.state === "active") el.onclick = () => guess(card.species_id);
+  return el;
+}
+
+function addBadge(thumb, card) {
+  const badge = document.createElement("span");
+  badge.className = "badge";
+  badge.textContent = card.role === "decoy" ? `tier ${card.tier_index}` : card.role;
+  thumb.appendChild(badge);
+}
+
+function renderTree(view) {
+  const tree = $("tree");
+  tree.innerHTML = "";
+  if (!view.lineage.length) {
+    tree.innerHTML = '<div class="unknown">Nothing placed yet.</div>';
+    return;
+  }
+  for (const stage of view.lineage) {
+    const head = document.createElement("div");
+    head.className = "stagehead";
+    head.textContent = `stage ${stage.stage_index + 1}`;
+    tree.appendChild(head);
+
+    const spine = document.createElement("div");
+    spine.className = "spine";
+    for (const tier of stage.tiers) {
+      const rung = document.createElement("div");
+      rung.className = "rung";
+      const label = document.createElement("div");
+      label.className = "tier";
+      label.textContent = `tier ${tier.tier_index}`;
+      rung.appendChild(label);
+      for (const sp of tier.species) rung.appendChild(leafNode(sp));
+      spine.appendChild(rung);
+    }
+    for (const sp of stage.target) {
+      const leaf = leafNode(sp);
+      leaf.classList.add("target");
+      spine.appendChild(leaf);
+    }
+    tree.appendChild(spine);
+  }
+  if (!view.completed) {
+    const q = document.createElement("div");
+    q.className = "unknown";
+    q.textContent = "??? toward the target";
+    tree.appendChild(q);
+  }
+}
+
+function leafNode(sp) {
+  const leaf = document.createElement("div");
+  leaf.className = `leaf ${sp.placement}`;
+  leaf.innerHTML = `${escapeHtml(sp.english_name)} <i>${escapeHtml(sp.scientific_name)}</i>`;
+  return leaf;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function render(view, outcome) {
+  $("score").textContent = view.score;
+  $("stake").textContent = view.stage_at_stake;
+  $("best").textContent = `${view.best_achievable}/${view.maximum}`;
+  $("stage").textContent = view.completed
+    ? "complete"
+    : `stage ${view.stage_index + 1} of ${view.stage_count}`;
+  $("prompt").innerHTML = view.completed
+    ? "<b>Game complete.</b>"
+    : view.is_ultimate
+      ? "<b>Final stage.</b> The target is on the board — find it."
+      : "<b>Which species takes us closer to the target?</b>";
+
+  const cards = $("cards");
+  cards.innerHTML = "";
+  for (const card of view.cards) cards.appendChild(cardNode(card));
+
+  if (view.completed) {
+    const again = document.createElement("button");
+    again.className = "again";
+    again.textContent = "Play this game again";
+    again.onclick = reset;
+    cards.after(again);
+  }
+
+  renderTree(view);
+  $("foot").textContent =
+    `game ${view.game_id.slice(0, 12)} · dataset ${view.dataset_version} ` +
+    `· seed ${view.seed} · stage scores ${JSON.stringify(view.stage_scores)}`;
+
+  if (outcome) {
+    describe(outcome, view);
+  } else if (view.completed) {
+    // A reload after the last guess has no transition to narrate.
+    const box = $("feedback");
+    box.className = "good";
+    box.textContent = `Final score ${view.score} of ${view.maximum}.`;
+  }
+}
+
+function describe(outcome, view) {
+  const box = $("feedback");
+  box.className = "";
+  const revealed = outcome.placed.filter((p) => p.placement === "revealed").length;
+  let text;
+  if (outcome.game_completed) {
+    text = `That was the target. Final score ${view.score} of ${view.maximum}.`;
+    box.classList.add("good");
+  } else if (outcome.stage_completed) {
+    text = `Correct — the deepest branch. Stage scored ${outcome.stage_score}. Descending.`;
+    box.classList.add("good");
+  } else if (outcome.role === "mulligan") {
+    text = `So close — second deepest. +1 bonus cancels the guess, so this costs you nothing. ${outcome.remaining} card(s) left.`;
+    box.classList.add("good");
+  } else {
+    text =
+      `More distant than the answer. −${outcome.penalty} ` +
+      (revealed
+        ? `(itself plus ${revealed} relative(s) it exposed as more distant). `
+        : "(nothing else was exposed). ") +
+      `${outcome.remaining} card(s) left.`;
+    box.classList.add("cost");
+  }
+  box.textContent = text;
+}
+
+async function guess(speciesId) {
+  if (busy) return;
+  busy = true;
+  try {
+    const res = await fetch("/api/guess", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ species_id: speciesId }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      $("feedback").textContent = data.error;
+      return;
+    }
+    busy = false;
+    render(data.view, data.outcome);
+  } finally {
+    busy = false;
+  }
+}
+
+async function reset() {
+  const res = await fetch("/api/reset", { method: "POST" });
+  const data = await res.json();
+  $("feedback").className = "";
+  $("feedback").textContent = "New attempt at the same game.";
+  render(data.view);
+}
+
+fetch("/api/view").then((r) => r.json()).then((view) => render(view));
+</script>
+</body>
+</html>

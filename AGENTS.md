@@ -24,6 +24,8 @@ silently encoding a new rule.
 - `phylogenomica.generation`: target eligibility and deterministic game/stage
   generation.
 - `phylogenomica.gameplay`: UI-independent guess, reveal, score, and game state.
+- `phylogenomica.prototype`: a local browser prototype over the engine. It is a
+  presentation layer only; it must never decide correctness.
 
 Keep scripts thin: reusable logic belongs under `src/phylogenomica/`. Keep the
 game engine independent of any future frontend.

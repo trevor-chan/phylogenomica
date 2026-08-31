@@ -223,13 +223,34 @@ cancelled by its bonus, which is what makes `mulligan → unlock` tie an
 immediate unlock. Same-tier peers are never charged and never placed, so a
 polytomy never forfeits points for its unresolved members.
 
+Play in a browser with the local prototype:
+
+```bash
+phylogenomica-prototype --target 887269 --seed 42 \
+  --normalized-dir data/processed/onezoom/27400288
+```
+
+It serves `http://127.0.0.1:8000/` and opens a window. Pass `--game FILE.json`
+to play a serialized game instead. The page is a renderer: every guess is
+resolved by the gameplay engine over a small JSON API, and the API is
+stage-scoped, so a card's tier and role reach the browser only once that card
+has been placed. The concealed target never crosses the wire early.
+
+Cards currently render without images. The historical snapshot's stored
+`media.eol.org` URLs now answer with a Cloudflare bot interstitial rather than
+image bytes, so each card falls back to a placeholder glyph; names and
+scientific names carry the phylogenetic signal, and the core puzzle does not
+depend on visual clues. See [data sources](docs/data_sources.md) for the
+evidence and the Wikidata-based fix.
+
 The current implementation covers reproducible acquisition, filtered
 extraction, normalized ingestion, biological-tree reconstruction, structural
 validation, read-only topology queries, batch target-feasibility analysis, a
 versioned per-target eligibility index, deterministic seeded relative
-selection, validated immutable game assembly, and the UI-independent guess,
-reveal, and scoring engine. The next milestone is a compact, reviewed,
-licensed gameplay bundle before frontend work.
+selection, validated immutable game assembly, the UI-independent guess,
+reveal, and scoring engine, and a local browser prototype. The next milestone
+is licensed media plus a compact, reviewed gameplay bundle, so a clean clone
+can play without the ignored intermediates.
 
 The project is licensed under the [MIT License](LICENSE). Source datasets and
 media retain their own licenses and attribution requirements.

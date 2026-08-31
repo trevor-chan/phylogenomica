@@ -99,6 +99,30 @@ must preserve:
 Licensing is a release requirement. Image availability can influence candidate
 quality but does not alter topology.
 
+#### Stored image URLs are no longer directly retrievable
+
+The historical snapshot's `overall_best_any` records point at
+`media.eol.org` content URLs. As of 2026-08-30 those hosts redirect to HTTPS
+and answer with a Cloudflare bot interstitial rather than image bytes:
+
+```
+$ curl -sIL http://media.eol.org/content/2015/11/17/10/64712_orig.jpg
+403  text/html  "Just a moment..."
+```
+
+The 403 is not user-agent or referer specific, and an `<img>` subresource
+cannot satisfy a JavaScript challenge, so these URLs do not render in a
+browser. Image *metadata* coverage is therefore still complete and the
+rich-card eligibility policy remains valid; only retrieval is blocked. The
+prototype degrades to a placeholder glyph per card.
+
+This is a media-retrieval problem, not a topology or licensing one. The
+documented fix is the Phase 10 fallback: every leaf already carries a
+`wikidata_id`, so Wikimedia Commons can supply images with their own
+attribution and license fields. A release bundle would need to resolve and
+cache media under `assets/gameplay/` regardless, since hotlinking a third-party
+media host is not an acceptable runtime dependency.
+
 ### Vernacular names
 
 The initial preference order is OneZoom, then ID-based Wikidata/Wikipedia

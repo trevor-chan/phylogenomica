@@ -62,6 +62,20 @@ engine does not revalidate the game; it consumes one already checked by
 `validate_game_structure`. `restore_state` rebuilds player state and confirms
 it is a reachable position in that specific game.
 
+### `phylogenomica.prototype`
+
+Owns the local browser prototype: a dependency-free `http.server` application
+that holds one session and serves a static page. It is the first instance of
+the separate presentation layer, and it decides nothing. Every guess is
+resolved by the gameplay engine on the server; the page renders the returned
+transition.
+
+Its API is deliberately stage-scoped. It serves only the open stage's cards,
+and a card's tier and role are added to the payload only once that card has
+been placed. The concealed target and the answer to the open stage therefore
+never cross the wire early, so stage-scoped target visibility holds against a
+player reading network traffic, not merely against one reading the screen.
+
 Developer scripts in `scripts/` call these modules but contain no reusable
 business logic. A future API and frontend should be separate layers rather than
 new responsibilities inside the engine.
