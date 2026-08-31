@@ -14,11 +14,14 @@ from phylogenomica.generation.eligibility import (
     build_target_eligibility_index,
 )
 from phylogenomica.generation.feasibility import (
+    FeasibilityAuditError,
     FeasibilityConfig,
     _advance_lineage,
     _LineageState,
     _target_metrics,
     audit_target_feasibility,
+    feasibility_configuration,
+    parse_feasibility_configuration,
     summarize_distribution,
 )
 from phylogenomica.generation.selection import (
@@ -44,6 +47,36 @@ def test_validates_feasibility_configuration() -> None:
         FeasibilityConfig(members_per_stage=0)
     with pytest.raises(ValueError, match="exceed"):
         FeasibilityConfig(members_per_stage=1)
+
+
+def test_round_trips_a_serialized_feasibility_configuration() -> None:
+    for config in (
+        FeasibilityConfig(),
+        FeasibilityConfig(
+            members_per_stage=4, stages_per_game=2, require_rich_card_metadata=True
+        ),
+    ):
+        payload = json.loads(json.dumps(feasibility_configuration(config)))
+        assert parse_feasibility_configuration(payload) == config
+
+
+def test_rejects_invalid_serialized_feasibility_configurations() -> None:
+    payload = feasibility_configuration(FeasibilityConfig())
+
+    with pytest.raises(FeasibilityAuditError, match="missing fields"):
+        parse_feasibility_configuration({"members_per_stage": 10})
+    with pytest.raises(FeasibilityAuditError, match="inconsistent fields"):
+        parse_feasibility_configuration({**payload, "total_decoy_species": 999})
+    with pytest.raises(FeasibilityAuditError, match="not an integer"):
+        parse_feasibility_configuration({**payload, "members_per_stage": "10"})
+    with pytest.raises(FeasibilityAuditError, match="not an integer"):
+        parse_feasibility_configuration({**payload, "stages_per_game": True})
+    with pytest.raises(FeasibilityAuditError, match="not a boolean"):
+        parse_feasibility_configuration(
+            {**payload, "require_rich_card_metadata": 1}
+        )
+    with pytest.raises(FeasibilityAuditError, match="configuration is invalid"):
+        parse_feasibility_configuration({**payload, "members_per_stage": 1})
 
 
 def test_assigns_decoys_mulligan_and_unlock_to_separate_tiers() -> None:
@@ -141,7 +174,10 @@ def _write_normalized_database(path: Path) -> None:
             ott_id INTEGER,
             scientific_name TEXT,
             preferred INTEGER,
-            language_primary TEXT
+            language_primary TEXT,
+            vernacular_name TEXT NOT NULL DEFAULT 'Test species',
+            source_table TEXT NOT NULL DEFAULT 'vernacular_by_ott',
+            source_row_id INTEGER NOT NULL DEFAULT 1
         );
         CREATE TABLE images (
             subject_type TEXT,
@@ -150,7 +186,11 @@ def _write_normalized_database(path: Path) -> None:
             overall_best_any INTEGER,
             url TEXT,
             rights TEXT,
-            license TEXT
+            license TEXT,
+            source_code INTEGER DEFAULT 99,
+            source_id TEXT DEFAULT 'test-image',
+            source_table TEXT NOT NULL DEFAULT 'images_by_ott',
+            source_row_id INTEGER NOT NULL DEFAULT 1
         );
         """
     )
@@ -168,10 +208,14 @@ def _write_normalized_database(path: Path) -> None:
         ),
     )
     connection.execute(
-        "INSERT INTO vernacular_names VALUES ('ott', 103, NULL, 1, 'en')"
+        "INSERT INTO vernacular_names "
+        "(subject_type, ott_id, scientific_name, preferred, language_primary) "
+        "VALUES ('ott', 103, NULL, 1, 'en')"
     )
     connection.execute(
-        "INSERT INTO images VALUES "
+        "INSERT INTO images "
+        "(subject_type, ott_id, scientific_name, overall_best_any, "
+        "url, rights, license) VALUES "
         "('ott', 103, NULL, 1, 'https://example.test/3', 'Author', 'CC BY')"
     )
     connection.commit()
@@ -292,11 +336,15 @@ def test_filters_both_targets_and_relative_capacity(tmp_path: Path) -> None:
     _write_tree_database(tree)
     connection = sqlite3.connect(normalized)
     connection.executemany(
-        "INSERT INTO vernacular_names VALUES ('ott', ?, NULL, 1, 'en')",
+        "INSERT INTO vernacular_names "
+        "(subject_type, ott_id, scientific_name, preferred, language_primary) "
+        "VALUES ('ott', ?, NULL, 1, 'en')",
         ((101,), (104,), (105,)),
     )
     connection.executemany(
-        "INSERT INTO images VALUES "
+        "INSERT INTO images "
+        "(subject_type, ott_id, scientific_name, overall_best_any, "
+        "url, rights, license) VALUES "
         "('ott', ?, NULL, 1, 'https://example.test/image', 'Author', 'CC BY')",
         ((101,), (104,), (105,)),
     )
@@ -341,11 +389,15 @@ def _write_eligibility_sources(normalized_dir: Path) -> None:
         "UPDATE leaves SET scientific_name = NULL WHERE leaf_id = 2"
     )
     connection.executemany(
-        "INSERT INTO vernacular_names VALUES ('ott', ?, NULL, 1, 'en')",
+        "INSERT INTO vernacular_names "
+        "(subject_type, ott_id, scientific_name, preferred, language_primary) "
+        "VALUES ('ott', ?, NULL, 1, 'en')",
         ((101,), (104,), (105,)),
     )
     connection.executemany(
-        "INSERT INTO images VALUES "
+        "INSERT INTO images "
+        "(subject_type, ott_id, scientific_name, overall_best_any, "
+        "url, rights, license) VALUES "
         "('ott', ?, NULL, 1, 'https://example.test/image', 'Author', 'CC BY')",
         ((101,), (104,), (105,)),
     )

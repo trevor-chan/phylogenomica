@@ -305,9 +305,52 @@ subordinate to topology and avoids turning recognizability into an eligibility
 rule. The output contains 49 role-assigned relatives; the global target supplies
 the tenth member of the ultimate stage during game assembly.
 
+Game generator version 1 implements steps 6–7 as the immutable `GeneratedGame`
+above. It resolves cards, appends the target to the ultimate stage, records
+each stage's backbone boundary nodes, shuffles members, and validates.
+
+`phylogenomica.data.cards` owns card resolution. `CardMetadataStore` batches
+leaf, vernacular, and image lookups over the normalized database and applies
+the same predicates as the rich-card feasibility policy: a scientific name, a
+`preferred` English vernacular, and an `overall_best_any` image whose URL,
+rights, and licence are nonempty after trimming. A species may be described by
+an OTT-keyed or a name-keyed record; OTT-keyed records win, and duplicates
+resolve by source table and row ID so one species always yields one card. The
+store raises rather than emitting a partial card, so a presentation gap fails
+generation instead of reaching a player.
+
+Stage boundaries are recorded as backbone node IDs. A transition stage starts
+at its shallowest selected tier's ancestor and ends at its deepest; the
+ultimate stage ends at the target's own collapsed parent, which may lie deeper
+than its deepest selected tier when trailing tiers go unused. Because a tier
+index is a position on the collapsed root-to-target path, validation proves
+continuity from the recorded tiers alone and additionally anchors every node to
+a real lineage position when the backbone is supplied.
+
 Randomness comes only from an explicit local generator. Given identical data,
 generator version, target, configuration, and seed, output bytes should be
-stable where practical.
+stable where practical. Each stage's member shuffle draws from its own stream,
+keyed by the generation record plus the stage index, so stages never share one
+permutation and no role occupies a fixed visible slot.
+
+### Serialized games
+
+`to_dict` and `game_from_dict` are inverses, and `load_game` reads one from
+disk. Deserialization is the boundary at which an untrusted file becomes a game
+object, so it always validates.
+
+A game carries every field its identifier digests, so a game read back from
+disk recomputes its own `game_id` and stage shuffles without the selection that
+produced it. `validate_game_structure` therefore applies every rule except
+agreement with a specific selection: role counts and tier ordering, target
+visibility, the tier projection, the per-stage shuffle, card completeness,
+duplicates, and backbone continuity. `validate_generated_game` adds the
+selection cross-check and is what generation uses. A serialized configuration
+is parsed from its five inputs alone; the derived totals are recomputed and
+compared so a stale or edited policy is rejected rather than reinterpreted.
+
+The gameplay engine consumes a loaded game and never reopens the upstream
+databases.
 
 The selector derives its local random state from a canonical SHA-256 record of
 dataset version, selector version, target, complete feasibility configuration,
@@ -349,9 +392,13 @@ Every generated stage requires automated checks:
   exactly once as a normal selectable card in the ultimate stage.
 - **Duplicates:** a species is not reused unless configuration explicitly
   permits it.
-- **Continuity:** successive stages descend along one target-containing lineage.
+- **Continuity:** successive stages descend along one target-containing lineage,
+  each tier index maps to exactly one backbone node, and every recorded stage
+  boundary sits at its own tier's backbone position.
+- **Cards:** every member carries a matching, complete player-facing card.
 - **Reveal safety:** a guess never eliminates a possibly deeper relative.
-- **Determinism:** identical versioned inputs reproduce the same game.
+- **Determinism:** identical versioned inputs reproduce the same game, including
+  the per-stage member shuffle and the serialized bytes.
 
 Tree preprocessing also needs malformed-input tests for cycles, orphans,
 multiple roots, missing identifiers, and pathological monotypic chains.

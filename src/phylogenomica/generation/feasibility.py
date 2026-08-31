@@ -322,6 +322,63 @@ def feasibility_configuration(config: FeasibilityConfig) -> dict[str, int | bool
     }
 
 
+CONFIGURATION_INPUT_FIELDS = (
+    "members_per_stage",
+    "stages_per_game",
+    "unlock_species_per_transition_stage",
+    "mulligan_species_per_stage",
+    "require_rich_card_metadata",
+)
+
+
+def parse_feasibility_configuration(
+    payload: Mapping[str, object],
+) -> FeasibilityConfig:
+    """Rebuild a policy from its serialized form.
+
+    Only the constructor inputs are read. Every derived total is recomputed and
+    compared, so a payload whose derived fields disagree with its inputs is
+    rejected rather than silently reinterpreted under the current rules.
+    """
+    missing = [key for key in CONFIGURATION_INPUT_FIELDS if key not in payload]
+    if missing:
+        raise FeasibilityAuditError(
+            f"serialized configuration is missing fields: {missing}"
+        )
+    values: dict[str, int] = {}
+    for key in CONFIGURATION_INPUT_FIELDS[:-1]:
+        value = payload[key]
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise FeasibilityAuditError(
+                f"serialized configuration field {key} is not an integer"
+            )
+        values[key] = value
+    rich_cards = payload["require_rich_card_metadata"]
+    if not isinstance(rich_cards, bool):
+        raise FeasibilityAuditError(
+            "serialized configuration field require_rich_card_metadata "
+            "is not a boolean"
+        )
+    try:
+        config = FeasibilityConfig(**values, require_rich_card_metadata=rich_cards)
+    except ValueError as error:
+        raise FeasibilityAuditError(
+            f"serialized configuration is invalid: {error}"
+        ) from error
+
+    rendered = feasibility_configuration(config)
+    inconsistent = sorted(
+        key
+        for key, value in rendered.items()
+        if key in payload and payload[key] != value
+    )
+    if inconsistent:
+        raise FeasibilityAuditError(
+            f"serialized configuration has inconsistent fields: {inconsistent}"
+        )
+    return config
+
+
 def _database_metadata(connection: sqlite3.Connection) -> dict[str, str]:
     try:
         return {

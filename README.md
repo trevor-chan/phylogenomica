@@ -172,12 +172,42 @@ and seed determine the result. The same inputs reproduce identical JSON, while
 different seeds can change both selected tiers and representative species for
 the same target.
 
+Assemble a complete, validated, immutable game for an eligible target:
+
+```bash
+phylogenomica-generate-game 887269 \
+  --seed 42 \
+  --normalized-dir data/processed/onezoom/27400288 \
+  --output data/processed/onezoom/27400288/games/human-seed-42.json
+```
+
+Game generator version 1 resolves one player-facing card per species from the
+normalized metadata, adds the target as a normal selectable card in the
+ultimate stage, shuffles each stage on its own seeded stream, and runs every
+generated-game validator before returning. A card requires a scientific name, a
+preferred English vernacular name, and an `overall_best_any` image with
+nonempty URL, rights, and licence; OTT-keyed records take precedence over
+name-keyed records, and ties resolve by source table and row ID.
+
+The game ID is a SHA-256 digest of the dataset version, generator and selector
+versions, target, complete configuration, and seed. Identical inputs reproduce
+identical JSON bytes, while a different seed produces a different game for the
+same target. On the historical snapshot a default `M=5`, `N=10` game contains 50
+unique species and takes roughly 0.3 seconds to generate.
+
+Serialized games round-trip through `phylogenomica.generation.game.load_game`
+and `game_from_dict`. Because a game carries every field its identifier
+digests, a loaded game recomputes its own ID and stage shuffles and is
+revalidated in full without the selection that produced it. A truncated,
+hand-edited, or foreign-version game is rejected at load rather than reaching
+the gameplay engine.
+
 The current implementation covers reproducible acquisition, filtered
 extraction, normalized ingestion, biological-tree reconstruction, structural
 validation, read-only topology queries, batch target-feasibility analysis, a
-versioned per-target eligibility index, and deterministic seeded relative
-selection. The next milestone is assembling and validating complete immutable
-games from these selections.
+versioned per-target eligibility index, deterministic seeded relative
+selection, and validated immutable game assembly. The next milestone is the
+UI-independent guess, reveal, and scoring engine.
 
 The project is licensed under the [MIT License](LICENSE). Source datasets and
 media retain their own licenses and attribution requirements.

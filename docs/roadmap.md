@@ -33,9 +33,11 @@ Completed engineering foundations:
   topology distributions, explicit failure categories, and metadata coverage;
   and
 - a deterministic, manifest-backed target-eligibility index with a read-only
-  query interface; and
+  query interface;
 - a validated, deterministic seeded relative selector that varies tier layouts
-  and species representatives per target.
+  and species representatives per target; and
+- batch player-facing card resolution, validated immutable game assembly, and
+  self-validating game deserialization.
 
 The historical development snapshot has 2,235,076 leaves, 201,578 biological
 internal nodes, 104,142 bifurcations, and 97,436 genuine polytomies. It has no
@@ -69,11 +71,19 @@ policy, versions, reason definitions, and validation counts. Metadata-invalid
 source leaves are represented by aggregate manifest evidence rather than
 generator-facing rows.
 
+Game generator version 1 assembles those selections into immutable games. A
+60-target random sample of the eligible set generated 60 valid `M=5`, `N=10`
+games of 50 unique species at roughly 313 ms each, and repeated runs reproduced
+identical JSON bytes. Card resolution applies the same rich-card predicates as
+the feasibility policy, so a presentation gap fails generation loudly rather
+than reaching a player. Serialized games round-trip exactly and revalidate on
+load without their selection, which is the interface the gameplay engine will
+consume.
+
 The next implementation sequence is:
 
-1. assemble and validate immutable seeded games from relative selections;
-2. implement UI-independent guess, reveal, score, and stage transitions; and
-3. compact a reviewed, licensed gameplay-ready subset before frontend work.
+1. implement UI-independent guess, reveal, score, and stage transitions; and
+2. compact a reviewed, licensed gameplay-ready subset before frontend work.
 
 A current production dump and explicit derived-data redistribution terms remain
 parallel release gates; development continues against the matched historical
@@ -174,10 +184,14 @@ Deliverable: reproducible relative pools for representative targets.
 
 ## Phase 6 — Stage and game generation
 
-- Sample stages across the full usable evolutionary depth.
-- Guarantee decoy/unlock role separation and stage continuity.
-- Serialize complete immutable games with version and seed metadata.
-- Apply all generated-game validators automatically.
+Status: complete for the first game schema and generator.
+
+- ~~Sample stages across the full usable evolutionary depth.~~
+- ~~Guarantee decoy/unlock role separation and stage continuity.~~
+- ~~Resolve one complete player-facing card per selected species.~~
+- ~~Serialize complete immutable games with version and seed metadata.~~
+- ~~Read serialized games back, revalidating them without their selection.~~
+- ~~Apply all generated-game validators automatically.~~
 
 Deliverable: deterministic sample games generated from the real dataset.
 
@@ -258,7 +272,7 @@ the core loop has passed data and gameplay validation.
 
 ## Immediate next action
 
-Assemble the seeded relative selection into a complete immutable game object,
-including the visible final-stage target, player-facing card metadata, shuffled
-card order, and automatic generated-game validators. Keep the current
+Implement the UI-independent gameplay engine over the generated game: active
+relatives, role-based guess processing, polytomy-safe reveals, mulligan
+scoring, stage transitions, and serializable player state. Keep the current
 production dump request open as the release-data upgrade path.
