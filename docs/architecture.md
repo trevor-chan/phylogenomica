@@ -282,6 +282,7 @@ Game
     │   └── player-facing metadata reference
     ├── tiers[]
     │   ├── source_node_id
+    │   ├── age_ma
     │   └── relative_ids[]
     ├── mulligan_species_id
     ├── unlock_species_id (transition stages only)
@@ -337,9 +338,26 @@ subordinate to topology and avoids turning recognizability into an eligibility
 rule. The output contains 49 role-assigned relatives; the global target supplies
 the tenth member of the ultimate stage during game assembly.
 
-Game generator version 1 implements steps 6–7 as the immutable `GeneratedGame`
+Game generator version 2 implements steps 6–7 as the immutable `GeneratedGame`
 above. It resolves cards, appends the target to the ultimate stage, records
-each stage's backbone boundary nodes, shuffles members, and validates.
+each stage's backbone boundary nodes and divergence ages, shuffles members, and
+validates.
+
+Game schema version 2 added `age_ma` to every tier. Divergence ages are display
+metadata and never affect correctness, but they are stored on the game rather
+than looked up at render time so a serialized game stays self-contained and one
+puzzle always carries one set of ages. Because the generator now emits
+different content, its version moved to 2, which changes every `game_id` and
+every stage shuffle; version 1 games are refused on load rather than
+reinterpreted. Selection is unaffected, since the relative selector seeds from
+its own version.
+
+Ages are sparse — roughly 46% of tiers carry one on the historical snapshot —
+so a missing age is `None` rather than a defect. Validation checks that ages
+are non-negative and never increase toward the target, which is a genuine
+correctness property: a divergence deeper on the backbone is more recent. That
+invariant was verified exhaustively against the snapshot rather than assumed;
+see [data sources](data_sources.md).
 
 `phylogenomica.data.cards` owns card resolution. `CardMetadataStore` batches
 leaf, vernacular, and image lookups over the normalized database and applies

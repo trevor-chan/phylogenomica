@@ -95,6 +95,13 @@ placed. Playing the historical snapshot surfaced one material data finding —
 the stored `media.eol.org` image URLs now answer with a Cloudflare
 interstitial, so cards render without images.
 
+The cladogram is now the interface: it grows left to right from the root toward
+the target with the open stage's cards in a row beneath it, and encodes
+resolved/unresolved, inferred/revealed, and polytomy structure on independent
+visual channels. Game schema version 2 added `age_ma` to every tier so a
+serialized game carries its own divergence ages; the generator version moved to
+2 with it, so version 1 games are refused on load and must be regenerated.
+
 The next implementation sequence is:
 
 1. resolve and cache licensed media so cards can show images again; and
@@ -239,7 +246,7 @@ Deliverable: a functional prototype for evaluating the core mechanic.
 
 ## Phase 9 — Tree visualization
 
-Status: the cladogram is now the board. Age labels remain.
+Status: complete.
 
 - ~~Distinguish resolved, unresolved, inferred, and revealed structure.~~ A
   solid trunk is resolved and a dashed one is the concealed continuation;
@@ -250,9 +257,9 @@ Status: the cladogram is now the board. Age labels remain.
   grows left to right and scrolls; `Follow` holds the active end, `Fit all`
   frames the whole game, and below roughly half scale the labels drop away to
   leave a structural overview.
-- Add optional divergence-age labels. Not done: `age_ma` exists on normalized
-  nodes but is not carried on the generated game, so this needs either a game
-  schema field or a display-only lookup in the presentation layer.
+- ~~Add optional divergence-age labels.~~ Game schema version 2 carries
+  `age_ma` on every tier, so a serialized game is self-contained. Ages are
+  sparse (about 46% of tiers) and the label is omitted where none exists.
 
 Deliverable: a continuous cladogram that functions as board, feedback, and
 history.

@@ -264,6 +264,41 @@ class CardMetadataStore:
                 )
         return records
 
+    def divergence_ages(
+        self, node_ids: Sequence[int]
+    ) -> dict[int, float | None]:
+        """Resolve each internal node's divergence age in millions of years.
+
+        The age is display metadata: most nodes carry none, and a missing age
+        is reported as ``None`` rather than treated as a defect.
+        """
+        ordered_ids = sorted({int(node_id) for node_id in node_ids})
+        if not ordered_ids:
+            return {}
+        ages: dict[int, float | None] = {}
+        try:
+            for offset in range(0, len(ordered_ids), QUERY_BATCH_SIZE):
+                batch = ordered_ids[offset : offset + QUERY_BATCH_SIZE]
+                placeholders = ",".join("?" for _ in batch)
+                ages.update(
+                    {
+                        int(node_id): None if age is None else float(age)
+                        for node_id, age in self._connection.execute(
+                            "SELECT node_id, age_ma "
+                            f"FROM nodes WHERE node_id IN ({placeholders})",
+                            batch,
+                        )
+                    }
+                )
+        except sqlite3.Error as error:
+            raise CardMetadataError(
+                f"cannot read normalized divergence ages: {error}"
+            ) from error
+        missing = sorted(set(ordered_ids) - ages.keys())
+        if missing:
+            raise CardMetadataError(f"unknown ancestor node IDs: {missing[:5]!r}")
+        return ages
+
     def resolve(self, species_ids: Sequence[int]) -> dict[int, SpeciesCard]:
         """Resolve one complete rich card for every unique requested species."""
         ordered_ids = tuple(int(species_id) for species_id in species_ids)

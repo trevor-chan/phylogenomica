@@ -160,11 +160,22 @@ function fit(value, maxPx, perChar) {
   return value.length <= max ? value : value.slice(0, Math.max(1, max - 1)) + "…";
 }
 
+// Ages span 4000 Ma to under 1 Ma, so significant figures beat fixed decimals.
+function formatAge(age) {
+  // Source ages carry artefacts like 25.000001, so round before trimming.
+  if (age >= 100) return `${Math.round(age)} Ma`;
+  if (age >= 10) return `${Number(age.toFixed(1))} Ma`;
+  return `${Number(age.toPrecision(2))} Ma`;
+}
+
 function columns(view) {
   const cols = [];
   for (const stage of view.lineage) {
     for (const tier of stage.tiers) {
-      cols.push({ stage: stage.stage_index, tier: tier.tier_index, species: tier.species });
+      cols.push({
+        stage: stage.stage_index, tier: tier.tier_index,
+        age: tier.age_ma, species: tier.species,
+      });
     }
   }
   return cols;
@@ -231,11 +242,11 @@ function renderTree(view) {
       cx: x, cy: trunkY, r: polytomy ? 5 : 3.5,
       class: polytomy ? "node polytomy" : "node",
     }));
-    svg.appendChild(text(
-      x + 7, trunkY + (dir === -1 ? 16 : -8),
-      polytomy ? `tier ${col.tier} · ${col.species.length} spp` : `tier ${col.tier}`,
-      "tierlabel",
-    ));
+    let label = polytomy
+      ? `tier ${col.tier} · ${col.species.length} spp`
+      : `tier ${col.tier}`;
+    if (col.age !== null && col.age !== undefined) label += ` · ${formatAge(col.age)}`;
+    svg.appendChild(text(x + 7, trunkY + (dir === -1 ? 16 : -8), label, "tierlabel"));
 
     col.species.forEach((sp, k) => {
       const y = ys[k];

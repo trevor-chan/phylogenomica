@@ -123,6 +123,27 @@ attribution and license fields. A release bundle would need to resolve and
 cache media under `assets/gameplay/` regardless, since hotlinking a third-party
 media host is not an acceptable runtime dependency.
 
+#### Divergence ages are sparse but internally consistent
+
+`nodes.age_ma` is populated for 15,562 of the snapshot's internal nodes, which
+covers roughly 46% of the tiers a generated game uses. Coverage concentrates on
+deep, well-studied backbone nodes, so early stages usually carry ages and later
+ones often do not.
+
+Age monotonicity was checked exhaustively rather than sampled. Across all
+15,561 parent/child pairs where both nodes carry an age, no parent is younger
+than its child, and 1,867 pairs are exactly equal:
+
+```sql
+SELECT COUNT(*), SUM(CASE WHEN p.age_ma < c.age_ma THEN 1 ELSE 0 END)
+FROM nodes c JOIN nodes p ON c.biological_parent_id = p.node_id
+WHERE c.age_ma IS NOT NULL AND p.age_ma IS NOT NULL;
+-- 15561, 0
+```
+
+Generation therefore enforces non-increasing ages along a game's tiers, with
+ties allowed. Ages are display metadata and never determine correctness.
+
 ### Vernacular names
 
 The initial preference order is OneZoom, then ID-based Wikidata/Wikipedia

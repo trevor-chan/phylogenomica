@@ -43,8 +43,8 @@ from phylogenomica.tree.preprocess import (
 )
 from phylogenomica.tree.query import BiologicalTree, TaxonRef, TreeQueryError
 
-GAME_SCHEMA_VERSION = 1
-GAME_GENERATOR_VERSION = 1
+GAME_SCHEMA_VERSION = 2
+GAME_GENERATOR_VERSION = 2
 
 GameRole = Literal["decoy", "mulligan", "unlock", "target"]
 MEMBER_ROLES = frozenset(("decoy", "mulligan", "unlock", "target"))
@@ -70,6 +70,7 @@ class GameTier:
     ancestor_node_id: int
     role: Literal["decoy", "mulligan", "unlock"]
     species_ids: tuple[int, ...]
+    age_ma: float | None
 
 
 @dataclass(frozen=True)
@@ -130,6 +131,9 @@ def _game_tier_from_dict(payload: Mapping[str, object]) -> GameTier:
         ancestor_node_id=int(payload["ancestor_node_id"]),  # type: ignore[arg-type]
         role=_role(payload["role"], TIER_ROLES),  # type: ignore[arg-type]
         species_ids=tuple(int(value) for value in payload["species_ids"]),  # type: ignore[union-attr]
+        age_ma=(
+            None if payload["age_ma"] is None else float(payload["age_ma"])  # type: ignore[arg-type]
+        ),
     )
 
 
@@ -162,6 +166,15 @@ def game_from_dict(payload: Mapping[str, object]) -> GeneratedGame:
     was truncated, hand-edited, or produced by another generator version fails
     here rather than reaching the gameplay engine.
     """
+    # Check the version before the fields, so a game from an older schema
+    # reports the mismatch rather than a missing-field error for whichever
+    # field that schema happened to lack.
+    schema_version = payload.get("schema_version")
+    if schema_version != GAME_SCHEMA_VERSION:
+        raise GameGenerationError(
+            f"game has an unsupported schema version: {schema_version!r}; "
+            f"this build reads version {GAME_SCHEMA_VERSION}"
+        )
     try:
         game = GeneratedGame(
             schema_version=int(payload["schema_version"]),  # type: ignore[arg-type]
@@ -268,7 +281,10 @@ def _member_from_relative(
     )
 
 
-def _game_tiers(relatives: Sequence[SelectedRelative]) -> tuple[GameTier, ...]:
+def _game_tiers(
+    relatives: Sequence[SelectedRelative],
+    ages: Mapping[int, float | None],
+) -> tuple[GameTier, ...]:
     grouped: dict[tuple[int, int, str], list[int]] = {}
     for relative in relatives:
         key = (relative.tier_index, relative.ancestor_node_id, relative.role)
@@ -279,6 +295,7 @@ def _game_tiers(relatives: Sequence[SelectedRelative]) -> tuple[GameTier, ...]:
             ancestor_node_id=ancestor_node_id,
             role=role,  # type: ignore[arg-type]
             species_ids=tuple(sorted(species_ids)),
+            age_ma=ages.get(ancestor_node_id),
         )
         for (tier_index, ancestor_node_id, role), species_ids in sorted(
             grouped.items()
@@ -335,6 +352,7 @@ def _validate_stage_continuity(
     """
     ancestor_by_tier: dict[int, int] = {}
     tier_by_ancestor: dict[int, int] = {}
+    age_by_tier: dict[int, float | None] = {}
     previous_deepest_tier = -1
     for stage in game.stages:
         if not stage.tiers:
@@ -356,12 +374,29 @@ def _validate_stage_continuity(
                 != tier.tier_index
             ):
                 raise GameGenerationError("one ancestor node spans multiple tiers")
+            if tier.age_ma is not None and tier.age_ma < 0:
+                raise GameGenerationError("divergence age is negative")
+            # Tier indexes are unique per stage and strictly increasing across
+            # them, so each one is seen exactly once here.
+            age_by_tier[tier.tier_index] = tier.age_ma
 
         is_ultimate = stage.stage_index == len(game.stages) - 1
         if stage.start_node_id != stage.tiers[0].ancestor_node_id:
             raise GameGenerationError("stage start node is not its shallowest tier")
         if not is_ultimate and stage.end_node_id != stage.tiers[-1].ancestor_node_id:
             raise GameGenerationError("stage end node is not its deepest tier")
+
+    # A divergence deeper on the backbone is more recent, so ages must not
+    # increase toward the target. Ties are common and allowed; absent ages are
+    # skipped rather than treated as a break in the sequence.
+    previous_age: float | None = None
+    for tier_index in sorted(age_by_tier):
+        age = age_by_tier[tier_index]
+        if age is None:
+            continue
+        if previous_age is not None and age > previous_age:
+            raise GameGenerationError("divergence ages increase toward the target")
+        previous_age = age
 
     if backbone_node_ids is None:
         return
@@ -421,7 +456,11 @@ def _validate_stage_roles(stage: GeneratedStage) -> None:
         role_tiers["unlock"]
     ):
         raise GameGenerationError("unlock is not deeper than every mulligan")
-    if stage.tiers != _game_tiers(relatives):
+    # Ages are source data the members do not carry, so they are taken as
+    # declared here and checked for consistency and ordering by the continuity
+    # pass, which sees every tier in the game at once.
+    declared_ages = {tier.ancestor_node_id: tier.age_ma for tier in stage.tiers}
+    if stage.tiers != _game_tiers(relatives, declared_ages):
         raise GameGenerationError("game tier projection does not match members")
 
     for role, attribute in (
@@ -582,6 +621,13 @@ def assemble_game(
                     "card metadata and selection dataset versions differ"
                 )
             cards = metadata.resolve(all_species_ids)
+            ages = metadata.divergence_ages(
+                [
+                    relative.ancestor_node_id
+                    for stage in selection.stages
+                    for relative in stage.relatives
+                ]
+            )
         with BiologicalTree.open(tree_database) as tree:
             backbone_node_ids = tree.lineage_node_ids(
                 TaxonRef("leaf", selection.target_id)
@@ -595,7 +641,7 @@ def assemble_game(
             _member_from_relative(relative, cards)
             for relative in selected_stage.relatives
         ]
-        tiers = _game_tiers(selected_stage.relatives)
+        tiers = _game_tiers(selected_stage.relatives, ages)
         is_ultimate = selected_stage.stage_index == len(selection.stages) - 1
         if is_ultimate:
             canonical_members.append(

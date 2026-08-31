@@ -73,6 +73,10 @@ def _write_game_sources(normalized_dir: Path) -> None:
             ott_id INTEGER,
             popularity_rank INTEGER
         );
+        CREATE TABLE nodes (
+            node_id INTEGER PRIMARY KEY,
+            age_ma REAL
+        );
         CREATE TABLE vernacular_names (
             subject_type TEXT,
             ott_id INTEGER,
@@ -107,6 +111,15 @@ def _write_game_sources(normalized_dir: Path) -> None:
         (
             (species_id, f"Species {species_id}", 100 + species_id, species_id)
             for species_id in species_ids
+        ),
+    )
+    # Ages fall toward the target, and one node has none: most real nodes
+    # carry no age at all.
+    connection.executemany(
+        "INSERT INTO nodes VALUES (?, ?)",
+        (
+            (node_id, None if node_id == 3 else float((TIER_COUNT + 1 - node_id) * 100))
+            for node_id in range(1, TIER_COUNT + 1)
         ),
     )
     connection.executemany(
@@ -867,3 +880,86 @@ def test_command_line_writes_and_reports_games(
     # Leaf 2 sits on the shallowest tier and cannot support the stage shape.
     with pytest.raises(SystemExit, match="ineligible"):
         main(argv(2))
+
+
+def test_carries_divergence_ages_on_every_tier(sources: dict[str, Path]) -> None:
+    game = generate_game(target_id=TARGET_ID, seed=11, config=_config(), **sources)
+
+    tiers = [tier for stage in game.stages for tier in stage.tiers]
+    # Node 3 has no age, and tier index j - 1 corresponds to node j.
+    for tier in tiers:
+        expected = (
+            None
+            if tier.ancestor_node_id == 3
+            else float((TIER_COUNT + 1 - tier.ancestor_node_id) * 100)
+        )
+        assert tier.age_ma == expected, tier
+
+    ages = [tier.age_ma for tier in tiers if tier.age_ma is not None]
+    assert ages == sorted(ages, reverse=True)
+    assert any(tier.age_ma is None for tier in tiers)
+
+
+def test_round_trips_divergence_ages(sources: dict[str, Path]) -> None:
+    game = generate_game(target_id=TARGET_ID, seed=11, config=_config(), **sources)
+
+    payload = _serialized(game)
+    assert "age_ma" in payload["stages"][0]["tiers"][0]
+    restored = game_from_dict(payload)
+
+    assert restored == game
+    assert [t.age_ma for s in restored.stages for t in s.tiers] == [
+        t.age_ma for s in game.stages for t in s.tiers
+    ]
+
+
+@pytest.mark.parametrize(
+    ("tamper", "message"),
+    [
+        pytest.param(
+            # Make the shallowest tier younger than a deeper one.
+            lambda payload: payload["stages"][0]["tiers"][0].update(age_ma=0.5),
+            "divergence ages increase toward the target",
+            id="ages-increase",
+        ),
+        pytest.param(
+            lambda payload: payload["stages"][0]["tiers"][0].update(age_ma=-5.0),
+            "divergence age is negative",
+            id="negative-age",
+        ),
+        pytest.param(
+            lambda payload: payload["stages"][0]["tiers"][0].update(age_ma="old"),
+            "invalid serialized game",
+            id="non-numeric-age",
+        ),
+        pytest.param(
+            lambda payload: payload["stages"][0]["tiers"][0].pop("age_ma"),
+            "invalid serialized game",
+            id="missing-age-field",
+        ),
+    ],
+)
+def test_rejects_invalid_divergence_ages(
+    sources: dict[str, Path], tamper, message: str
+) -> None:
+    game = generate_game(target_id=TARGET_ID, seed=11, config=_config(), **sources)
+    payload = _serialized(game)
+
+    game_from_dict(payload)
+    tamper(payload)
+    with pytest.raises(GameGenerationError, match=message):
+        game_from_dict(payload)
+
+
+def test_reports_the_new_schema_and_generator_versions(
+    sources: dict[str, Path],
+) -> None:
+    game = generate_game(target_id=TARGET_ID, seed=11, config=_config(), **sources)
+
+    assert game.schema_version == GAME_SCHEMA_VERSION == 2
+    assert game.generator_version == GAME_GENERATOR_VERSION == 2
+    # A game serialized by the previous generator must be refused, not guessed at.
+    stale = _serialized(game)
+    stale["schema_version"] = 1
+    with pytest.raises(GameGenerationError, match="unsupported schema version"):
+        game_from_dict(stale)

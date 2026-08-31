@@ -107,8 +107,16 @@ def _card(member: GameMember, placed: PlacedSpecies | None) -> dict[str, object]
 def _lineage(game: GeneratedGame, state: GameState) -> list[dict[str, object]]:
     """Group placed species into the growing cladogram, root to target."""
     members = _members_by_id(game)
+    ages = {
+        tier.ancestor_node_id: tier.age_ma
+        for stage in game.stages
+        for tier in stage.tiers
+    }
+    age_by_tier: dict[int, float | None] = {}
     stages: dict[int, dict[int | None, list[dict[str, object]]]] = {}
     for placed in state.placements:
+        if placed.tier_index is not None:
+            age_by_tier[placed.tier_index] = ages.get(placed.ancestor_node_id)
         tiers = stages.setdefault(placed.stage_index, {})
         tiers.setdefault(placed.tier_index, []).append(
             {
@@ -123,7 +131,11 @@ def _lineage(game: GeneratedGame, state: GameState) -> list[dict[str, object]]:
         {
             "stage_index": stage_index,
             "tiers": [
-                {"tier_index": tier_index, "species": tiers[tier_index]}
+                {
+                    "tier_index": tier_index,
+                    "age_ma": age_by_tier.get(tier_index),
+                    "species": tiers[tier_index],
+                }
                 for tier_index in sorted(
                     (t for t in tiers if t is not None),
                 )

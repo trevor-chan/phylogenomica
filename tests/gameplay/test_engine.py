@@ -85,6 +85,7 @@ def _stage(stage_index: int, specs, *, target_id: int | None = None):
             ancestor_node_id=ancestor_node_id,
             role=role,  # type: ignore[arg-type]
             species_ids=tuple(sorted(species_ids)),
+            age_ma=float(500 - tier_index * 10),
         )
         for (tier_index, ancestor_node_id, role), species_ids in sorted(
             grouped.items()

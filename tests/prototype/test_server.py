@@ -2,6 +2,7 @@ import json
 import threading
 import urllib.error
 import urllib.request
+from dataclasses import replace
 
 import pytest
 
@@ -68,6 +69,7 @@ def _stage(stage_index: int, specs, *, target_id: int | None = None):
                 ancestor_node_id=m.ancestor_node_id,
                 role=m.role,  # type: ignore[arg-type]
                 species_ids=(m.species_id,),
+                age_ma=float(500 - m.tier_index * 10),
             )
             for m in relatives
         ),
@@ -300,3 +302,32 @@ def test_command_line_requires_exactly_one_game_source() -> None:
         parser.parse_args([])
     with pytest.raises(SystemExit):
         parser.parse_args(["--target", "5", "--game", "game.json"])
+
+
+def test_reports_divergence_ages_on_placed_tiers() -> None:
+    game = _game()
+    state, _ = replay(game, [MULLIGAN_A, UNLOCK])
+
+    tiers = build_view(game, state)["lineage"][0]["tiers"]
+
+    # The fixture ages fall by ten per tier, matching the game's own tiers.
+    assert [(t["tier_index"], t["age_ma"]) for t in tiers] == [
+        (0, 500.0),
+        (1, 490.0),
+        (2, 480.0),
+    ]
+    ages = [t["age_ma"] for t in tiers]
+    assert ages == sorted(ages, reverse=True)
+
+
+def test_reports_a_missing_divergence_age_as_null() -> None:
+    game = _game()
+    first = game.stages[0]
+    ageless = replace(
+        first, tiers=(replace(first.tiers[0], age_ma=None), *first.tiers[1:])
+    )
+    game = replace(game, stages=(ageless, *game.stages[1:]))
+    state, _ = replay(game, [DECOY_A])
+
+    tiers = build_view(game, state)["lineage"][0]["tiers"]
+    assert tiers[0]["age_ma"] is None

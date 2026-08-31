@@ -6,10 +6,12 @@ the closest selected relative. Every guess reveals part of one persistent
 cladogram, and a game progressively narrows from broad branches of life toward
 the target, which becomes a normal selectable card in the ultimate stage.
 
-The project is currently in its data-pipeline and game-engine design phase. It
-is not playable yet. The first implementation goal is to validate the game
-against a real OneZoom snapshot, then build a deterministic, UI-independent
-generator and gameplay engine.
+The pipeline, generator, gameplay engine, and a local browser prototype are
+implemented and validated against a real OneZoom snapshot, so a maintainer with
+the processed dataset can generate and play a game today. It is not yet
+distributable: the compact, licensed gameplay bundle that would let a clean
+clone play does not exist, and card images are unavailable pending the media
+work described below.
 
 ## Design invariants
 
@@ -189,6 +191,12 @@ preferred English vernacular name, and an `overall_best_any` image with
 nonempty URL, rights, and licence; OTT-keyed records take precedence over
 name-keyed records, and ties resolve by source table and row ID.
 
+Game schema version 2 stores each tier's divergence age (`age_ma`) on the game
+itself, so a serialized game is self-contained. Ages are display metadata and
+never affect correctness; roughly 46% of tiers carry one, and generation checks
+that the ages present never increase toward the target. Games written by the
+version 1 generator are refused on load and must be regenerated.
+
 The game ID is a SHA-256 digest of the dataset version, generator and selector
 versions, target, complete configuration, and seed. Identical inputs reproduce
 identical JSON bytes, while a different seed produces a different game for the
@@ -243,7 +251,9 @@ concealed continuation; a filled tip is a relationship you inferred and a
 hollow one was revealed to you; same-tier relatives branch from a single node
 as a rake, so the display never implies an order the topology does not support.
 `Follow` keeps the active end in view, `Fit all` frames the whole game, and
-zooming far out drops the labels to leave a structural overview.
+zooming far out drops the labels to leave a structural overview. Tiers whose
+divergence age is known are labelled with it, so a human game reads from about
+2150 Ma at the root down to 6 Ma at the last branch.
 
 Cards currently render without images. The historical snapshot's stored
 `media.eol.org` URLs now answer with a Cloudflare bot interstitial rather than
