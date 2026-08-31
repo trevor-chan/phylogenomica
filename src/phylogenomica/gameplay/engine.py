@@ -390,22 +390,37 @@ def validate_state(game: GeneratedGame, state: GameState) -> None:
     if state.completed:
         if state.active_species_ids:
             raise GameplayError("a completed game has no active species")
-        return
+    else:
+        stage = game.stages[state.current_stage_index]
+        member_ids = {member.species_id for member in stage.members}
+        active = set(state.active_species_ids)
+        if not active <= member_ids:
+            raise GameplayError("active species are not cards of the current stage")
+        stage_placed = {
+            placed.species_id
+            for placed in state.placements
+            if placed.stage_index == state.current_stage_index
+        }
+        if active | stage_placed != member_ids:
+            raise GameplayError("active and placed species do not cover the stage")
+        if not active:
+            raise GameplayError("an open stage has at least one active species")
 
-    stage = game.stages[state.current_stage_index]
-    member_ids = {member.species_id for member in stage.members}
-    active = set(state.active_species_ids)
-    if not active <= member_ids:
-        raise GameplayError("active species are not cards of the current stage")
-    stage_placed = {
+    # Placements preserve guess order: every transition appends its guessed
+    # species first, followed by anything that guess revealed. Replaying those
+    # guesses reconstructs the only state they can reach and verifies topology,
+    # placement provenance, scores, active cards, and completion together.
+    guesses = tuple(
         placed.species_id
         for placed in state.placements
-        if placed.stage_index == state.current_stage_index
-    }
-    if active | stage_placed != member_ids:
-        raise GameplayError("active and placed species do not cover the stage")
-    if not active:
-        raise GameplayError("an open stage has at least one active species")
+        if placed.placement == "guessed"
+    )
+    try:
+        reachable, _ = replay(game, guesses)
+    except GameplayError as error:
+        raise GameplayError(f"game state is not reachable: {error}") from error
+    if state != reachable:
+        raise GameplayError("game state is not reachable from its recorded guesses")
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -928,6 +928,20 @@ def test_round_trips_divergence_ages(sources: dict[str, Path]) -> None:
             id="negative-age",
         ),
         pytest.param(
+            lambda payload: payload["stages"][0]["tiers"][0].update(
+                age_ma=float("nan")
+            ),
+            "divergence age is not finite",
+            id="nan-age",
+        ),
+        pytest.param(
+            lambda payload: payload["stages"][0]["tiers"][0].update(
+                age_ma=float("inf")
+            ),
+            "divergence age is not finite",
+            id="infinite-age",
+        ),
+        pytest.param(
             lambda payload: payload["stages"][0]["tiers"][0].update(age_ma="old"),
             "invalid serialized game",
             id="non-numeric-age",

@@ -477,6 +477,26 @@ def test_rejects_a_state_that_repeats_a_placement() -> None:
         validate_state(game, duplicated)
 
 
+def test_rejects_well_shaped_but_unreachable_restored_states() -> None:
+    game = _documented_game()
+    completed, _ = replay(game, perfect_guesses(game))
+
+    for broken in (
+        # A completed game cannot omit every placement or award arbitrary score.
+        replace(completed, placements=(), stage_scores=(999, 999)),
+        # Immutable topology and role data must agree with the generated game.
+        replace(
+            completed,
+            placements=(
+                replace(completed.placements[0], role="target"),  # type: ignore[arg-type]
+                *completed.placements[1:],
+            ),
+        ),
+    ):
+        with pytest.raises(GameplayError, match="not reachable"):
+            restore_state(game, json.loads(json.dumps(broken.to_dict())))
+
+
 def test_initial_state_is_valid_and_serializable() -> None:
     game = _documented_game()
     state = initial_state(game)

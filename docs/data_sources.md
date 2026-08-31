@@ -117,11 +117,14 @@ rich-card eligibility policy remains valid; only retrieval is blocked. The
 prototype degrades to a placeholder glyph per card.
 
 This is a media-retrieval problem, not a topology or licensing one. The
-documented fix is the Phase 10 fallback: every leaf already carries a
-`wikidata_id`, so Wikimedia Commons can supply images with their own
-attribution and license fields. A release bundle would need to resolve and
-cache media under `assets/gameplay/` regardless, since hotlinking a third-party
-media host is not an acceptable runtime dependency.
+documented fix is the Phase 10 fallback: 44,185 of the 44,361 current rich-card
+species (99.6033%) carry a `wikidata_id`, so Wikimedia Commons can be the
+primary source of replacement images with its own attribution and license
+fields. Of the remaining 176, 132 carry an EOL ID, 71 carry a GBIF ID, and 44
+carry neither; those records need a documented secondary path or exclusion
+rather than fuzzy matching hidden inside the resolver. A release bundle would
+need to resolve and cache media under `assets/gameplay/` regardless, since
+hotlinking a third-party media host is not an acceptable runtime dependency.
 
 #### Divergence ages are sparse but internally consistent
 

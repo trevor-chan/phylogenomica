@@ -131,6 +131,9 @@ def test_serves_only_the_open_stage_and_hides_the_target() -> None:
     ]
     # The concealed target is not in a transition stage's payload at all.
     assert TARGET not in [card["species_id"] for card in view["cards"]]
+    # Generation identity includes the target in a deterministic digest. None
+    # of it belongs in the player view while the target is concealed.
+    assert {"game_id", "dataset_version", "seed", "target_id"}.isdisjoint(view)
 
 
 def test_withholds_tier_and_role_until_a_card_is_placed() -> None:

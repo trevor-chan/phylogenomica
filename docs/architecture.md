@@ -75,6 +75,9 @@ and a card's tier and role are added to the payload only once that card has
 been placed. The concealed target and the answer to the open stage therefore
 never cross the wire early, so stage-scoped target visibility holds against a
 player reading network traffic, not merely against one reading the screen.
+Generation identity fields are also withheld while playing because the
+deterministic game identifier digests the target ID and would make a small
+candidate-space search possible.
 
 The cladogram is the interface. An SVG trunk runs left to right from the root
 to the target, one column per placed tier, with branches alternating above and

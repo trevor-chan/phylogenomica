@@ -266,10 +266,30 @@ history.
 
 ## Phase 10 — Metadata enrichment
 
+Status: in progress. Source-ID coverage for the historical rich-card universe
+is now measured: 44,185 of 44,361 species have a Wikidata ID. The initial pilot
+should operate on one generated game's 50 unique species before any
+dataset-wide media request.
+
 - Add ID-based Wikidata/Wikipedia fallbacks only where useful.
 - Improve image choice and attribution presentation.
 - Improve vernacular-name handling.
 - Optionally add post-game descriptions.
+
+The first implementation increment is a reproducible, resumable metadata-only
+resolver:
+
+1. batch Wikidata entity lookups by Q-ID and record the `P18` Commons filename;
+2. query Commons `imageinfo` for the canonical file page, content URL, media
+   type, dimensions, creator/credit, and explicit license fields;
+3. write raw responses and normalized resolved/unresolved records to ignored
+   cache storage with retrieval timestamps and checksums; and
+4. produce an audit report for manual image and license review before
+   downloading, transforming, or promoting any asset.
+
+Missing Wikidata IDs, missing `P18`, missing Commons pages, unsupported media,
+and incomplete attribution must remain distinct unresolved outcomes. The
+resolver must not silently fall back to a name search.
 
 Deliverable: richer cards without changing topology or answer semantics.
 
@@ -313,9 +333,12 @@ the core loop has passed data and gameplay validation.
 ## Immediate next action
 
 Restore card images by resolving `wikidata_id` to Wikimedia Commons media with
-its own attribution and license fields, then cache the results under
-`assets/gameplay/`. Hotlinking a third-party media host is not an acceptable
-runtime dependency in any case, so this is bundle work rather than a detour.
+its own attribution and license fields for the 44,185 rich-card species that
+carry one, then cache reviewed results under `assets/gameplay/`. Preserve
+explicit unresolved records for the remaining 176 and evaluate their EOL/GBIF
+IDs as secondary paths rather than silently using fuzzy name matching.
+Hotlinking a third-party media host is not an acceptable runtime dependency in
+any case, so this is bundle work rather than a detour.
 Then measure the prospective runtime-bundle size and compact a reviewed,
 licensed subset under `data/gameplay/`, so a clean clone can play without the
 ignored intermediates. Keep the current production dump request open as the

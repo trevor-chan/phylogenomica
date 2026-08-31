@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import random
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -374,8 +375,11 @@ def _validate_stage_continuity(
                 != tier.tier_index
             ):
                 raise GameGenerationError("one ancestor node spans multiple tiers")
-            if tier.age_ma is not None and tier.age_ma < 0:
-                raise GameGenerationError("divergence age is negative")
+            if tier.age_ma is not None:
+                if not math.isfinite(tier.age_ma):
+                    raise GameGenerationError("divergence age is not finite")
+                if tier.age_ma < 0:
+                    raise GameGenerationError("divergence age is negative")
             # Tier indexes are unique per stage and strictly increasing across
             # them, so each one is seen exactly once here.
             age_by_tier[tier.tier_index] = tier.age_ma
@@ -456,6 +460,9 @@ def _validate_stage_roles(stage: GeneratedStage) -> None:
         role_tiers["unlock"]
     ):
         raise GameGenerationError("unlock is not deeper than every mulligan")
+    for tier in stage.tiers:
+        if tier.age_ma is not None and not math.isfinite(tier.age_ma):
+            raise GameGenerationError("divergence age is not finite")
     # Ages are source data the members do not carry, so they are taken as
     # declared here and checked for consistency and ordering by the continuity
     # pass, which sees every tier in the game at once.

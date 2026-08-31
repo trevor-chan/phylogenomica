@@ -100,6 +100,11 @@ rights, and licence values. Among leaves, 77,633 (3.47%) have an
 `overall_best_any` image, and only 44,361 (1.98%) have both that image and a
 preferred English name.
 
+Within those 44,361 rich-card species, 44,185 (99.6033%) have a Wikidata ID and
+176 do not. Of the 176 without Wikidata, 132 have an EOL ID, 71 have a GBIF ID,
+and 44 have neither identifier (the EOL and GBIF counts overlap). This makes
+Wikidata a high-coverage media-enrichment bridge, but not a universal one.
+
 The complete scientific-name and popularity coverage is encouraging for
 topology and representative selection. Card-ready English-name-and-image
 coverage is too sparse to require both fields globally; enrichment or a

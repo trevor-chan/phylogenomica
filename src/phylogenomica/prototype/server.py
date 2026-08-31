@@ -159,9 +159,6 @@ def build_view(game: GeneratedGame, state: GameState) -> dict[str, object]:
         ]
     )
     return {
-        "game_id": game.game_id,
-        "dataset_version": game.dataset_version,
-        "seed": game.seed,
         "stage_index": state.current_stage_index,
         "stage_count": len(game.stages),
         "is_ultimate": (
