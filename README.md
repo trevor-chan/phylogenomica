@@ -262,6 +262,24 @@ scientific names carry the phylogenetic signal, and the core puzzle does not
 depend on visual clues. See [data sources](docs/data_sources.md) for the
 evidence and the Wikidata-based fix.
 
+Resolve replacement-image metadata for one generated game without downloading
+any media:
+
+```bash
+phylogenomica-resolve-wikimedia \
+  data/processed/onezoom/27400288/games/human-seed-42.json \
+  --normalized-dir data/processed/onezoom/27400288
+```
+
+The command batches stable Wikidata IDs into `wbgetentities` requests, resolves
+ranked `P18` filenames through Commons `imageinfo`, and writes raw response
+evidence plus a normalized audit under ignored `data/cache/wikimedia/`. It
+distinguishes missing IDs, entities, images, Commons pages, unsupported media,
+and incomplete attribution. It intentionally downloads no images: every result
+still requires image and license review before promotion to `assets/gameplay/`.
+Use `--transport curl` when Conda Python cannot use the host system's trusted CA
+chain; both transports keep TLS verification enabled.
+
 The current implementation covers reproducible acquisition, filtered
 extraction, normalized ingestion, biological-tree reconstruction, structural
 validation, read-only topology queries, batch target-feasibility analysis, a

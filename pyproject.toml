@@ -25,6 +25,7 @@ phylogenomica-select-relatives = "phylogenomica.generation.selection:main"
 phylogenomica-generate-game = "phylogenomica.generation.game:main"
 phylogenomica-play = "phylogenomica.gameplay.engine:main"
 phylogenomica-prototype = "phylogenomica.prototype.server:main"
+phylogenomica-resolve-wikimedia = "phylogenomica.data.wikimedia:main"
 
 [project.optional-dependencies]
 dev = [

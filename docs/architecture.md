@@ -35,6 +35,13 @@ Owns dump parsing, schema adapters, metadata normalization, validation,
 manifests, serialization, and quantitative audits. Source-specific field names
 should stop at this boundary.
 
+Phase 10's Wikimedia resolver also lives here because it is an offline,
+rebuildable enrichment step rather than runtime gameplay. It maps the species
+in a validated game to OneZoom Wikidata IDs, resolves ranked `P18` statements
+and Commons `imageinfo` in batches, and stores raw response evidence plus
+normalized review records under ignored cache storage. It does not download or
+promote assets, and the gameplay engine never calls a live metadata service.
+
 ### `phylogenomica.tree`
 
 Owns root and child construction, biological-parent reconstruction,

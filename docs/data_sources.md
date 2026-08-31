@@ -74,6 +74,21 @@ and short post-game descriptions.
 Enrichment follows the working topology; it does not change game correctness.
 It comes after ingestion, preprocessing, generation, and engine validation.
 
+Resolver version 1 implements a metadata-only pilot for one generated game. It
+batches OneZoom's numeric Wikidata IDs as Q-IDs through `wbgetentities`, prefers
+non-deprecated `P18` statements by Wikidata rank, and queries the selected
+Commons files through `imageinfo`. Raw response envelopes record the canonical
+request URL, retrieval time, and checksum under `data/cache/wikimedia/`.
+Normalized records convert the Commons `extmetadata` HTML to plain text for
+safe later display while preserving the raw response as evidence.
+
+The resolver reports distinct statuses for missing or invalid Wikidata IDs,
+missing entities, absent `P18`, absent Commons pages or image information,
+non-image media, and incomplete creator/license fields. It performs no fuzzy
+name lookup and downloads no media. A result marked `resolved` still requires
+manual review because Commons itself advises reusers to verify each file's
+copyright status and license requirements.
+
 ### Divergence times
 
 OneZoom node ages are sufficient for the initial version when present. Missing

@@ -267,9 +267,10 @@ history.
 ## Phase 10 — Metadata enrichment
 
 Status: in progress. Source-ID coverage for the historical rich-card universe
-is now measured: 44,185 of 44,361 species have a Wikidata ID. The initial pilot
-should operate on one generated game's 50 unique species before any
-dataset-wide media request.
+is now measured: 44,185 of 44,361 species have a Wikidata ID. Resolver version
+1 and its fixture-based cache/failure audit are implemented. The initial pilot
+operates on one generated game's 50 unique species before any dataset-wide
+media request.
 
 - Add ID-based Wikidata/Wikipedia fallbacks only where useful.
 - Improve image choice and attribution presentation.
@@ -279,17 +280,24 @@ dataset-wide media request.
 The first implementation increment is a reproducible, resumable metadata-only
 resolver:
 
-1. batch Wikidata entity lookups by Q-ID and record the `P18` Commons filename;
-2. query Commons `imageinfo` for the canonical file page, content URL, media
-   type, dimensions, creator/credit, and explicit license fields;
-3. write raw responses and normalized resolved/unresolved records to ignored
-   cache storage with retrieval timestamps and checksums; and
-4. produce an audit report for manual image and license review before
+1. ~~Batch Wikidata entity lookups by Q-ID and record ranked `P18` Commons
+   filenames.~~
+2. ~~Query Commons `imageinfo` for the canonical file page, content URL, media
+   type, dimensions, creator/credit, and explicit license fields.~~
+3. ~~Write raw responses and normalized resolved/unresolved records to ignored
+   cache storage with retrieval timestamps and checksums.~~
+4. Run the live 50-species pilot and review its image and license audit before
    downloading, transforming, or promoting any asset.
 
 Missing Wikidata IDs, missing `P18`, missing Commons pages, unsupported media,
 and incomplete attribution must remain distinct unresolved outcomes. The
 resolver must not silently fall back to a name search.
+
+The human/seed-42 pilot contains 48 Wikidata-linked species and two explicit
+missing-ID records (`Brucella abortus NCTC 8038` and `Escherichia coli
+99.1753`). Its first live lookup was correctly deferred by Wikidata's `maxlag`
+response, so no incomplete response was cached and the same command can resume
+when the service has recovered.
 
 Deliverable: richer cards without changing topology or answer semantics.
 
@@ -332,13 +340,13 @@ the core loop has passed data and gameplay validation.
 
 ## Immediate next action
 
-Restore card images by resolving `wikidata_id` to Wikimedia Commons media with
-its own attribution and license fields for the 44,185 rich-card species that
-carry one, then cache reviewed results under `assets/gameplay/`. Preserve
-explicit unresolved records for the remaining 176 and evaluate their EOL/GBIF
-IDs as secondary paths rather than silently using fuzzy name matching.
-Hotlinking a third-party media host is not an acceptable runtime dependency in
-any case, so this is bundle work rather than a detour.
+Rerun the cached 50-species Wikimedia metadata pilot after Wikidata's reported
+replication lag has cleared, inspect the resolved image choices and attribution
+fields, and document its status distribution. Only then download a small,
+reviewed subset into ignored working assets. Preserve explicit unresolved
+records and evaluate EOL/GBIF IDs as secondary paths rather than silently using
+fuzzy name matching. Hotlinking a third-party media host is not an acceptable
+runtime dependency in any case, so this is bundle work rather than a detour.
 Then measure the prospective runtime-bundle size and compact a reviewed,
 licensed subset under `data/gameplay/`, so a clean clone can play without the
 ignored intermediates. Keep the current production dump request open as the
