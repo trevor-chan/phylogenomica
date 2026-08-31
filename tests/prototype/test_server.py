@@ -20,6 +20,9 @@ from phylogenomica.generation.game import (
 from phylogenomica.prototype.server import (
     PAGE_PATH,
     PrototypeSession,
+    _load_prototype_game,
+    _next_game_factory,
+    _startup_summary,
     build_parser,
     build_view,
     serve,
@@ -116,6 +119,10 @@ def _game() -> GeneratedGame:
     )
 
 
+def _next_game(current: GeneratedGame) -> GeneratedGame:
+    return replace(current, game_id="b" * 64, seed=current.seed + 1)
+
+
 def test_serves_only_the_open_stage_and_hides_the_target() -> None:
     game = _game()
 
@@ -205,21 +212,23 @@ def test_reports_scores_alongside_the_board() -> None:
     assert finished["stage_at_stake"] == 0
 
 
-def test_session_guesses_and_resets() -> None:
-    session = PrototypeSession.start(_game())
+def test_session_guesses_and_plays_another_seed() -> None:
+    session = PrototypeSession.start(_game(), _next_game)
 
     outcome = session.guess(MULLIGAN_A)
     assert outcome.role == "mulligan"
     assert session.state.stage_bonus == 1
 
-    session.reset()
+    session.play_again()
+    assert session.game.seed == 8
+    assert session.game.game_id == "b" * 64
     assert session.state == initial_state(session.game)
     assert session.state.placements == ()
 
 
 @pytest.fixture
 def server():
-    httpd = serve(_game(), port=0)
+    httpd = serve(_game(), next_game=_next_game, port=0)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
     yield f"http://127.0.0.1:{httpd.server_address[1]}"
@@ -274,7 +283,7 @@ def test_resolves_guesses_over_http(server: str) -> None:
     assert payload["outcome"]["stage_completed"] is True
     assert payload["view"]["stage_index"] == 1
 
-    status, payload = _post(server, "/api/reset")
+    status, payload = _post(server, "/api/play-again")
     assert payload["view"]["stage_index"] == 0
     assert payload["view"]["score"] == 0
 
@@ -285,6 +294,7 @@ def test_rejects_bad_requests(server: str) -> None:
         ("/api/guess", {"species_id": TARGET}, 409),
         ("/api/guess", {}, 400),
         ("/api/guess", {"species_id": "abc"}, 400),
+        ("/api/reset", {}, 404),
         ("/api/missing", {}, 404),
     ):
         with pytest.raises(urllib.error.HTTPError) as caught:
@@ -297,14 +307,137 @@ def test_rejects_bad_requests(server: str) -> None:
     assert caught.value.code == 404
 
 
-def test_command_line_requires_exactly_one_game_source() -> None:
+def test_command_line_allows_a_random_target_or_one_explicit_source() -> None:
     parser = build_parser()
 
     assert parser.parse_args(["--target", "5"]).target == 5
-    with pytest.raises(SystemExit):
-        parser.parse_args([])
+    random_args = parser.parse_args([])
+    assert random_args.target is None and random_args.game is None
     with pytest.raises(SystemExit):
         parser.parse_args(["--target", "5", "--game", "game.json"])
+
+
+def test_loads_a_uniformly_selected_eligible_target_when_unspecified(
+    monkeypatch, tmp_path
+) -> None:
+    selected_target = 123
+    opened = []
+
+    class FakeEligibilityIndex:
+        def __init__(self, path):
+            opened.append(path)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            pass
+
+        def random_eligible_target_id(self):
+            return selected_target
+
+    generation_args = {}
+
+    def fake_generate_game(**kwargs):
+        generation_args.update(kwargs)
+        return _game()
+
+    monkeypatch.setattr(
+        "phylogenomica.prototype.server.TargetEligibilityIndex",
+        FakeEligibilityIndex,
+    )
+    monkeypatch.setattr(
+        "phylogenomica.prototype.server.generate_game", fake_generate_game
+    )
+    args = build_parser().parse_args(
+        ["--normalized-dir", str(tmp_path), "--seed", "19"]
+    )
+
+    game = _load_prototype_game(args)
+
+    eligibility = (
+        tmp_path / "target-eligibility-v1" / "target_eligibility.sqlite3"
+    )
+    assert opened == [eligibility]
+    assert generation_args["target_id"] == selected_target
+    assert generation_args["seed"] == 19
+    assert generation_args["eligibility_database"] == eligibility
+    assert game == _game()
+
+
+def test_play_again_increments_seed_and_retains_an_explicit_target(
+    monkeypatch, tmp_path
+) -> None:
+    generation_args = {}
+
+    def fake_generate_game(**kwargs):
+        generation_args.update(kwargs)
+        return _next_game(_game())
+
+    monkeypatch.setattr(
+        "phylogenomica.prototype.server.generate_game", fake_generate_game
+    )
+    args = build_parser().parse_args(
+        [
+            "--target",
+            str(TARGET),
+            "--normalized-dir",
+            str(tmp_path),
+            "--seed",
+            "7",
+        ]
+    )
+
+    game = _next_game_factory(args)(_game())
+
+    assert generation_args["target_id"] == TARGET
+    assert generation_args["seed"] == 8
+    assert game.seed == 8
+
+
+def test_play_again_selects_a_target_in_random_target_mode(
+    monkeypatch, tmp_path
+) -> None:
+    selected_target = 123
+    generation_args = {}
+
+    class FakeEligibilityIndex:
+        def __init__(self, _path):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            pass
+
+        def random_eligible_target_id(self):
+            return selected_target
+
+    def fake_generate_game(**kwargs):
+        generation_args.update(kwargs)
+        return _next_game(_game())
+
+    monkeypatch.setattr(
+        "phylogenomica.prototype.server.TargetEligibilityIndex",
+        FakeEligibilityIndex,
+    )
+    monkeypatch.setattr(
+        "phylogenomica.prototype.server.generate_game", fake_generate_game
+    )
+    args = build_parser().parse_args(["--normalized-dir", str(tmp_path)])
+
+    _next_game_factory(args)(_game())
+
+    assert generation_args["target_id"] == selected_target
+    assert generation_args["seed"] == 8
+
+
+def test_startup_summary_does_not_disclose_the_target() -> None:
+    summary = _startup_summary(_game())
+
+    assert "target" not in summary
+    assert "seed 7" in summary
 
 
 def test_reports_divergence_ages_on_placed_tiers() -> None:

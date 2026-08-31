@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import secrets
 import sqlite3
 import sys
 import tempfile
 from collections import Counter
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -609,6 +610,29 @@ class TargetEligibilityIndex:
         )
         for (target_id,) in rows:
             yield int(target_id)
+
+    def random_eligible_target_id(
+        self, *, randbelow: Callable[[int], int] | None = None
+    ) -> int:
+        """Choose one indexed eligible target uniformly without loading all IDs."""
+        row = self._connection.execute(
+            "SELECT COUNT(*) FROM target_eligibility WHERE eligible = 1"
+        ).fetchone()
+        count = 0 if row is None else int(row[0])
+        if count <= 0:
+            raise TargetEligibilityError("eligibility index has no eligible targets")
+        choose = secrets.randbelow if randbelow is None else randbelow
+        offset = choose(count)
+        if not 0 <= offset < count:
+            raise TargetEligibilityError("random target offset is outside the index")
+        selected = self._connection.execute(
+            "SELECT target_id FROM target_eligibility WHERE eligible = 1 "
+            "ORDER BY target_id LIMIT 1 OFFSET ?",
+            (offset,),
+        ).fetchone()
+        if selected is None:
+            raise TargetEligibilityError("could not read the selected eligible target")
+        return int(selected[0])
 
     def iter_indexed_target_ids(self) -> Iterator[int]:
         """Yield the complete configured target/relative card universe."""

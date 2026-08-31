@@ -15,7 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import webbrowser
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -36,6 +36,8 @@ from phylogenomica.gameplay.engine import (
 from phylogenomica.generation.eligibility import (
     ELIGIBILITY_DATABASE_FILENAME,
     ELIGIBILITY_INDEX_VERSION,
+    TargetEligibilityError,
+    TargetEligibilityIndex,
 )
 from phylogenomica.generation.feasibility import FeasibilityConfig
 from phylogenomica.generation.game import (
@@ -58,16 +60,22 @@ MAX_REQUEST_BYTES = 4096
 
 @dataclass
 class PrototypeSession:
-    """One single-player session over an immutable game."""
+    """One single-player session with a source for subsequent games."""
 
     game: GeneratedGame
     state: GameState
+    next_game: Callable[[GeneratedGame], GeneratedGame]
 
     @classmethod
-    def start(cls, game: GeneratedGame) -> PrototypeSession:
-        return cls(game=game, state=initial_state(game))
+    def start(
+        cls,
+        game: GeneratedGame,
+        next_game: Callable[[GeneratedGame], GeneratedGame],
+    ) -> PrototypeSession:
+        return cls(game=game, state=initial_state(game), next_game=next_game)
 
-    def reset(self) -> None:
+    def play_again(self) -> None:
+        self.game = self.next_game(self.game)
         self.state = initial_state(self.game)
 
     def guess(self, species_id: int) -> GuessOutcome:
@@ -231,8 +239,17 @@ class _Handler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": "not found"})
 
     def do_POST(self) -> None:  # noqa: N802 - http.server API
-        if self.path == "/api/reset":
-            self._session.reset()
+        if self.path == "/api/play-again":
+            try:
+                self._session.play_again()
+            except (
+                GameGenerationError,
+                RelativeSelectionError,
+                TargetEligibilityError,
+                ValueError,
+            ) as error:
+                self._send_json(409, {"error": str(error)})
+                return
             self._send_json(
                 200, {"view": build_view(self._session.game, self._session.state)}
             )
@@ -266,11 +283,17 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 def serve(
-    game: GeneratedGame, *, host: str = "127.0.0.1", port: int = 8000
+    game: GeneratedGame,
+    *,
+    next_game: Callable[[GeneratedGame], GeneratedGame],
+    host: str = "127.0.0.1",
+    port: int = 8000,
 ) -> ThreadingHTTPServer:
-    """Return a bound server for one game, ready to serve."""
+    """Return a bound server for a sequence of games, ready to serve."""
     httpd = ThreadingHTTPServer((host, port), _Handler)
-    httpd.session = PrototypeSession.start(game)  # type: ignore[attr-defined]
+    httpd.session = PrototypeSession.start(  # type: ignore[attr-defined]
+        game, next_game
+    )
     return httpd
 
 
@@ -278,10 +301,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Play a phylogenomica game in a local browser prototype."
     )
-    source = parser.add_mutually_exclusive_group(required=True)
+    source = parser.add_mutually_exclusive_group()
     source.add_argument("--game", type=Path, help="a serialized game to play")
-    source.add_argument("--target", type=int, help="generate a game for this target")
-    parser.add_argument("--seed", type=int, default=0)
+    source.add_argument(
+        "--target",
+        type=int,
+        help="generate for this target (default: choose an eligible target randomly)",
+    )
+    parser.add_argument(
+        "--seed", type=int, default=0, help="relative-selection seed (default: 0)"
+    )
     parser.add_argument("--normalized-dir", type=Path, default=DEFAULT_NORMALIZED_DIR)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
@@ -294,31 +323,89 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _load_prototype_game(args: argparse.Namespace) -> GeneratedGame:
+    if args.game:
+        return load_game(args.game)
+    normalized_dir = args.normalized_dir
+    eligibility_database = (
+        normalized_dir
+        / f"target-eligibility-v{ELIGIBILITY_INDEX_VERSION}"
+        / ELIGIBILITY_DATABASE_FILENAME
+    )
+    target_id = args.target
+    if target_id is None:
+        with TargetEligibilityIndex(eligibility_database) as eligibility:
+            target_id = eligibility.random_eligible_target_id()
+    return generate_game(
+        target_id=target_id,
+        seed=args.seed,
+        normalized_database=normalized_dir / DATABASE_FILENAME,
+        tree_database=normalized_dir
+        / f"tree-v{TREE_SCHEMA_VERSION}"
+        / TREE_DATABASE_FILENAME,
+        eligibility_database=eligibility_database,
+        config=FeasibilityConfig(require_rich_card_metadata=True),
+    )
+
+
+def _next_game_factory(
+    args: argparse.Namespace,
+) -> Callable[[GeneratedGame], GeneratedGame]:
+    """Build the launch-mode-aware source used by the Play again action."""
+    random_target = args.game is None and args.target is None
+    normalized_dir = args.normalized_dir
+    eligibility_database = (
+        normalized_dir
+        / f"target-eligibility-v{ELIGIBILITY_INDEX_VERSION}"
+        / ELIGIBILITY_DATABASE_FILENAME
+    )
+
+    def next_game(current: GeneratedGame) -> GeneratedGame:
+        target_id = current.target_id
+        if random_target:
+            with TargetEligibilityIndex(eligibility_database) as eligibility:
+                target_id = eligibility.random_eligible_target_id()
+        return generate_game(
+            target_id=target_id,
+            seed=current.seed + 1,
+            normalized_database=normalized_dir / DATABASE_FILENAME,
+            tree_database=normalized_dir
+            / f"tree-v{TREE_SCHEMA_VERSION}"
+            / TREE_DATABASE_FILENAME,
+            eligibility_database=eligibility_database,
+            config=current.configuration,
+        )
+
+    return next_game
+
+
+def _startup_summary(game: GeneratedGame) -> str:
+    """Describe the session without disclosing its concealed target."""
+    return f"game {game.game_id[:12]} - seed {game.seed}"
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     try:
-        if args.game:
-            game = load_game(args.game)
-        else:
-            normalized_dir = args.normalized_dir
-            game = generate_game(
-                target_id=args.target,
-                seed=args.seed,
-                normalized_database=normalized_dir / DATABASE_FILENAME,
-                tree_database=normalized_dir
-                / f"tree-v{TREE_SCHEMA_VERSION}"
-                / TREE_DATABASE_FILENAME,
-                eligibility_database=normalized_dir
-                / f"target-eligibility-v{ELIGIBILITY_INDEX_VERSION}"
-                / ELIGIBILITY_DATABASE_FILENAME,
-                config=FeasibilityConfig(require_rich_card_metadata=True),
-            )
-    except (GameGenerationError, RelativeSelectionError, ValueError) as error:
+        game = _load_prototype_game(args)
+    except (
+        GameGenerationError,
+        RelativeSelectionError,
+        TargetEligibilityError,
+        ValueError,
+    ) as error:
         raise SystemExit(str(error)) from error
 
-    httpd = serve(game, host=args.host, port=args.port)
+    httpd = serve(
+        game,
+        next_game=_next_game_factory(args),
+        host=args.host,
+        port=args.port,
+    )
     url = f"http://{args.host}:{args.port}/"
-    print(f"game {game.game_id[:12]} - target {game.target_id} - seed {game.seed}")
+    # The terminal is part of the player-visible surface. Do not disclose the
+    # concealed target here, especially when it was selected randomly.
+    print(_startup_summary(game))
     print(f"serving {url}  (ctrl-c to stop)")
     if args.open:
         webbrowser.open(url)

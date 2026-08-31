@@ -238,6 +238,24 @@ phylogenomica-prototype --target 887269 --seed 42 \
   --normalized-dir data/processed/onezoom/27400288
 ```
 
+Omit both `--target` and `--game` to choose uniformly from the eligible-target
+index on each launch:
+
+```bash
+phylogenomica-prototype \
+  --normalized-dir data/processed/onezoom/27400288
+```
+
+The randomly chosen target remains concealed, including in terminal output. A
+random launch chooses a new target nondeterministically; `--seed` still makes
+relative selection reproducible once that target has been chosen. Use an
+explicit `--target` when the entire game must be reproducible.
+
+After a completed game, **Play again** generates another game with the next
+seed. Random-target sessions also choose another eligible target; sessions
+started with `--target` or `--game` retain their target and vary the selected
+relatives.
+
 It serves `http://127.0.0.1:8000/` and opens a window. Pass `--game FILE.json`
 to play a serialized game instead. The page is a renderer: every guess is
 resolved by the gameplay engine over a small JSON API, and the API is

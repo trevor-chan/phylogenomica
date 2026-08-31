@@ -451,6 +451,16 @@ def test_builds_deterministic_queryable_target_eligibility_index(
         eligible_ids = list(index.iter_eligible_target_ids())
         assert len(eligible_ids) == 3
         assert eligible_ids == sorted(eligible_ids)
+        assert (
+            index.random_eligible_target_id(randbelow=lambda count: 0)
+            == eligible_ids[0]
+        )
+        assert (
+            index.random_eligible_target_id(randbelow=lambda count: count - 1)
+            == eligible_ids[-1]
+        )
+        with pytest.raises(TargetEligibilityError, match="outside the index"):
+            index.random_eligible_target_id(randbelow=lambda count: count)
         assert index.get(999) is None
 
         assert index.get(2) is None

@@ -362,8 +362,8 @@ function render(view, outcome) {
   if (view.completed) {
     const again = document.createElement("button");
     again.className = "again";
-    again.textContent = "Play this game again";
-    again.onclick = reset;
+    again.textContent = "Play again";
+    again.onclick = playAgain;
     cards.appendChild(again);
   }
 
@@ -420,12 +420,22 @@ async function guess(speciesId) {
   }
 }
 
-async function reset() {
-  const res = await fetch("/api/reset", { method: "POST" });
-  const data = await res.json();
-  $("feedback").className = "";
-  $("feedback").textContent = "New attempt at the same game.";
-  render(data.view);
+async function playAgain() {
+  if (busy) return;
+  busy = true;
+  try {
+    const res = await fetch("/api/play-again", { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) { $("feedback").textContent = data.error; return; }
+    scale = 1;
+    follow = true;
+    $("follow").setAttribute("aria-pressed", "true");
+    render(data.view);
+    $("feedback").className = "";
+    $("feedback").textContent = "New game.";
+  } finally {
+    busy = false;
+  }
 }
 
 $("zoom-in").onclick = () => { scale = Math.min(2, scale + 0.15); applyScale(); };

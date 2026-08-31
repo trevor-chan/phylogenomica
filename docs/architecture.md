@@ -86,6 +86,18 @@ Generation identity fields are also withheld while playing because the
 deterministic game identifier digests the target ID and would make a small
 candidate-space search possible.
 
+The prototype accepts an explicit target or serialized game, but defaults to a
+uniform random row from the eligible-target index when neither is supplied.
+This launch-time choice is intentionally nondeterministic and remains concealed
+from both the browser API and terminal output. Once chosen, the normal target,
+configuration, and seed determinism guarantees still apply.
+
+The Play again transition increments the current seed and regenerates rather
+than resetting the same game. In random-target mode it also draws another
+eligible target; explicit-target and serialized-game modes retain the current
+target. The new game replaces the session atomically only after generation
+succeeds.
+
 The cladogram is the interface. An SVG trunk runs left to right from the root
 to the target, one column per placed tier, with branches alternating above and
 below so neighbouring columns never collide. Cards for the open stage occupy a
