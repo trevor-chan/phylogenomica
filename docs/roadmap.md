@@ -239,10 +239,20 @@ Deliverable: a functional prototype for evaluating the core mechanic.
 
 ## Phase 9 — Tree visualization
 
-- Distinguish resolved, unresolved, inferred, and revealed structure.
-- Render polytomies without false ordering.
-- Preserve readable history while zooming toward later stages.
-- Add optional divergence-age labels.
+Status: the cladogram is now the board. Age labels remain.
+
+- ~~Distinguish resolved, unresolved, inferred, and revealed structure.~~ A
+  solid trunk is resolved and a dashed one is the concealed continuation;
+  filled tips are inferred by the player and hollow tips were revealed.
+- ~~Render polytomies without false ordering.~~ Same-tier relatives branch from
+  a single trunk node as a rake, so no order is implied among them.
+- ~~Preserve readable history while zooming toward later stages.~~ The tree
+  grows left to right and scrolls; `Follow` holds the active end, `Fit all`
+  frames the whole game, and below roughly half scale the labels drop away to
+  leave a structural overview.
+- Add optional divergence-age labels. Not done: `age_ma` exists on normalized
+  nodes but is not carried on the generated game, so this needs either a game
+  schema field or a display-only lookup in the presentation layer.
 
 Deliverable: a continuous cladogram that functions as board, feedback, and
 history.

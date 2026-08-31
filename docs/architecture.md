@@ -76,6 +76,16 @@ been placed. The concealed target and the answer to the open stage therefore
 never cross the wire early, so stage-scoped target visibility holds against a
 player reading network traffic, not merely against one reading the screen.
 
+The cladogram is the interface. An SVG trunk runs left to right from the root
+to the target, one column per placed tier, with branches alternating above and
+below so neighbouring columns never collide. Cards for the open stage occupy a
+single row beneath it. The four distinctions the design requires are encoded
+independently: stroke style separates resolved from unresolved, tip fill
+separates inferred from revealed, a shared trunk node renders a polytomy as a
+rake with no implied order, and the dashed trunk ending in `???` is the
+concealed continuation. The tree is built only from placed species, so it
+cannot leak the open stage's answer.
+
 Developer scripts in `scripts/` call these modules but contain no reusable
 business logic. A future API and frontend should be separate layers rather than
 new responsibilities inside the engine.

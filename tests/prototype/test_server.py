@@ -245,6 +245,9 @@ def test_serves_the_page_and_the_view(server: str) -> None:
     assert status == 200
     assert b"<title>Phylogenomica</title>" in page
     assert page == PAGE_PATH.read_bytes()
+    # The tree is the board, so its container and controls must be present.
+    for marker in (b'id="stage-tree"', b'id="cards"', b'id="fit"', b'id="follow"'):
+        assert marker in page
 
     status, body = _get(server, "/api/view")
     assert status == 200

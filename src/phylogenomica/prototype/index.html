@@ -6,95 +6,101 @@
 <title>Phylogenomica</title>
 <style>
   :root {
-    --bg: #10141a; --panel: #171d26; --line: #263041; --ink: #e7ecf3;
-    --muted: #8f9cb0; --accent: #6ea8fe; --good: #58c98a; --warn: #e0a458;
-    --dead: #4a5568;
+    --bg: #0e1218; --panel: #161c25; --line: #253044; --ink: #e7ecf3;
+    --muted: #8f9cb0; --faint: #4a5568; --accent: #6ea8fe;
+    --good: #58c98a; --warn: #e0a458;
   }
   @media (prefers-color-scheme: light) {
     :root {
-      --bg: #f4f6f9; --panel: #ffffff; --line: #dbe1ea; --ink: #16202e;
-      --muted: #5d6b7f; --accent: #2c6fd1; --good: #1f8a55; --warn: #a2640f;
-      --dead: #aab4c2;
+      --bg: #f4f6f9; --panel: #ffffff; --line: #d7dee8; --ink: #16202e;
+      --muted: #5d6b7f; --faint: #a6b1c0; --accent: #2c6fd1;
+      --good: #1f8a55; --warn: #9a5f0d;
     }
   }
   * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
     margin: 0; background: var(--bg); color: var(--ink);
     font: 15px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex; flex-direction: column; overflow: hidden;
   }
+
   header {
-    display: flex; flex-wrap: wrap; gap: 1rem 2rem; align-items: baseline;
-    padding: .9rem 1.25rem; border-bottom: 1px solid var(--line);
-    background: var(--panel); position: sticky; top: 0; z-index: 5;
+    display: flex; flex-wrap: wrap; gap: .75rem 1.5rem; align-items: baseline;
+    padding: .7rem 1.1rem; border-bottom: 1px solid var(--line);
+    background: var(--panel); flex: 0 0 auto;
   }
-  h1 { font-size: 1rem; margin: 0; letter-spacing: .08em; text-transform: uppercase; }
+  h1 { font-size: .95rem; margin: 0; letter-spacing: .09em; text-transform: uppercase; }
   h1 span { color: var(--muted); font-weight: 400; letter-spacing: 0; text-transform: none; }
-  .stats { display: flex; gap: 1.5rem; margin-left: auto; }
+  .stats { display: flex; gap: 1.4rem; margin-left: auto; }
   .stat { text-align: right; }
-  .stat b { display: block; font-size: 1.35rem; font-variant-numeric: tabular-nums; }
-  .stat small { color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; }
-  main { display: grid; grid-template-columns: minmax(0,1fr) 22rem; gap: 1.25rem; padding: 1.25rem; align-items: start; }
-  @media (max-width: 62rem) { main { grid-template-columns: minmax(0,1fr); } }
-  .prompt { margin: 0 0 .85rem; color: var(--muted); }
-  .prompt b { color: var(--ink); }
+  .stat b { display: block; font-size: 1.2rem; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .stat small { color: var(--muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; }
+
+  /* The tree is the board: it takes every pixel the chrome does not need.
+     The overlays sit on the wrapper, so they stay put while the tree scrolls. */
+  #board { flex: 1 1 auto; position: relative; min-height: 0; }
+  #stage-tree { position: absolute; inset: 0; overflow: auto; display: flex; }
+  /* auto margins centre the tree without clipping it once it outgrows the box.
+     flex: 0 0 auto is load-bearing: a flex item would otherwise shrink to fit
+     the container instead of overflowing into a scroll, silently shrinking the
+     whole cladogram as stages accumulate. */
+  #stage-tree svg { display: block; margin: auto; flex: 0 0 auto; }
+  .empty { margin: auto; color: var(--muted); font-style: italic; }
+  .controls {
+    position: absolute; top: .6rem; right: .8rem; z-index: 3; display: flex; gap: .3rem;
+    background: var(--panel); border: 1px solid var(--line); border-radius: .4rem; padding: .2rem;
+  }
+  .controls button {
+    border: 0; background: transparent; color: var(--muted); font: inherit; font-size: .78rem;
+    padding: .2rem .5rem; border-radius: .25rem; cursor: pointer;
+  }
+  .controls button:hover { color: var(--ink); background: var(--bg); }
+  .controls button[aria-pressed="true"] { color: var(--accent); background: var(--bg); }
+
+  .legend {
+    position: absolute; bottom: .6rem; left: .8rem; z-index: 3; display: flex;
+    flex-wrap: wrap; gap: .1rem .8rem; font-size: .7rem; color: var(--muted);
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: .4rem; padding: .35rem .6rem; max-width: 30rem;
+  }
+  .legend i { font-style: normal; color: var(--ink); }
+
+  footer {
+    flex: 0 0 auto; border-top: 1px solid var(--line); background: var(--panel);
+    padding: .6rem .9rem .75rem;
+  }
   #feedback {
-    min-height: 1.4rem; margin: 0 0 .85rem; padding: .55rem .8rem;
-    border-radius: .5rem; border: 1px solid var(--line); background: var(--panel);
+    margin: 0 0 .55rem; padding: .4rem .7rem; border-radius: .4rem;
+    border: 1px solid var(--line); background: var(--bg); font-size: .88rem;
     font-variant-numeric: tabular-nums;
   }
   #feedback.good { border-color: var(--good); }
   #feedback.cost { border-color: var(--warn); }
-  #cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: .8rem; }
+  #cards { display: flex; gap: .5rem; overflow-x: auto; padding-bottom: .2rem; }
   .card {
-    border: 1px solid var(--line); border-radius: .6rem; background: var(--panel);
-    overflow: hidden; text-align: left; padding: 0; color: inherit; font: inherit;
-    cursor: pointer; display: flex; flex-direction: column; transition: border-color .12s, transform .12s;
+    flex: 1 1 0; min-width: 7rem; display: flex; gap: .5rem; align-items: center;
+    text-align: left; padding: .4rem; border: 1px solid var(--line); border-radius: .45rem;
+    background: var(--bg); color: inherit; font: inherit; cursor: pointer;
+    transition: border-color .12s, transform .12s;
   }
   .card:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-2px); }
-  .card:disabled { cursor: default; opacity: .55; }
+  .card:disabled { cursor: default; opacity: .4; }
   .thumb {
-    aspect-ratio: 4 / 3; background: linear-gradient(160deg, var(--line), var(--panel));
-    display: grid; place-items: center; position: relative;
+    flex: 0 0 auto; width: 2.2rem; height: 2.2rem; border-radius: .3rem; overflow: hidden;
+    background: linear-gradient(160deg, var(--line), var(--panel));
+    display: grid; place-items: center; font-size: 1.1rem; color: var(--muted);
   }
   .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .thumb .glyph { font-size: 1.6rem; color: var(--muted); }
-  .body { padding: .55rem .65rem .65rem; }
-  .en { font-weight: 600; line-height: 1.25; }
-  .sci { font-style: italic; color: var(--muted); font-size: .85rem; margin-top: .15rem; }
-  .badge {
-    position: absolute; top: .4rem; left: .4rem; padding: .1rem .45rem;
-    border-radius: 1rem; font-size: .68rem; letter-spacing: .04em;
-    background: var(--bg); border: 1px solid var(--line); color: var(--muted);
-  }
-  .card[data-role="mulligan"] .badge { color: var(--warn); border-color: var(--warn); }
-  .card[data-role="unlock"] .badge, .card[data-role="target"] .badge { color: var(--good); border-color: var(--good); }
-  aside {
-    border: 1px solid var(--line); border-radius: .6rem; background: var(--panel);
-    padding: .9rem 1rem; position: sticky; top: 4.4rem;
-    max-height: calc(100vh - 6rem); overflow-y: auto;
-  }
-  aside h2 { font-size: .75rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 .6rem; }
-  .tree { font-size: .85rem; }
-  /* One spine per stage at a constant indent: a game places twenty-odd tiers,
-     and nesting each one would run the panel off the screen by the last stage. */
-  .spine { border-left: 2px solid var(--accent); margin-left: .3rem; padding-left: .75rem; }
-  .rung { padding: .1rem 0 .35rem; }
-  .tier { color: var(--muted); font-size: .68rem; letter-spacing: .05em; text-transform: uppercase; }
-  .leaf { margin: .06rem 0; line-height: 1.3; }
-  .leaf i { color: var(--muted); }
-  .leaf.guessed::before { content: "●"; color: var(--accent); margin-right: .35rem; }
-  .leaf.revealed::before { content: "○"; color: var(--dead); margin-right: .35rem; }
-  .leaf.target { font-weight: 600; }
-  .leaf.target::before { content: "◆"; color: var(--good); margin-right: .35rem; }
-  .unknown { color: var(--muted); font-style: italic; padding: .2rem 0 .2rem 1.05rem; }
-  .stagehead { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: .7rem 0 .25rem; }
-  .stagehead:first-child { margin-top: 0; }
-  footer { padding: 0 1.25rem 2rem; color: var(--muted); font-size: .78rem; }
-  button.again {
-    margin-top: .8rem; padding: .45rem .9rem; border-radius: .4rem; cursor: pointer;
+  .en { font-weight: 600; font-size: .85rem; line-height: 1.2; }
+  .sci { font-style: italic; color: var(--muted); font-size: .74rem; line-height: 1.2; }
+  .meta { min-width: 0; }
+  .meta > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meta .en { white-space: normal; overflow-wrap: anywhere; }
+  .again {
+    margin-left: .5rem; padding: .45rem .9rem; border-radius: .4rem; cursor: pointer;
     border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit;
   }
-  .attrib { font-size: .68rem; color: var(--muted); margin-top: .3rem; line-height: 1.3; }
 </style>
 </head>
 <body>
@@ -107,28 +113,201 @@
   </div>
 </header>
 
-<main>
-  <section>
-    <p class="prompt" id="prompt"><b>Which species takes us closer to the target?</b></p>
-    <p id="feedback">Pick the card whose most recent common ancestor with the hidden target is the newest.</p>
-    <div id="cards"></div>
-  </section>
-  <aside>
-    <h2>Cladogram</h2>
-    <div class="tree" id="tree"></div>
-  </aside>
-</main>
-<footer id="foot"></footer>
+<div id="board">
+  <div class="controls">
+    <button id="zoom-out" title="Zoom out">−</button>
+    <button id="zoom-in" title="Zoom in">+</button>
+    <button id="fit">Fit all</button>
+    <button id="follow" aria-pressed="true">Follow</button>
+  </div>
+  <div class="legend">
+    <span>● <i>inferred</i> — you placed it</span>
+    <span>○ <i>revealed</i> — the game placed it</span>
+    <span>— <i>resolved</i></span>
+    <span>--- <i>unresolved</i></span>
+    <span>⌐ <i>polytomy</i> — one event, no order</span>
+  </div>
+  <div id="stage-tree"></div>
+</div>
+
+<footer>
+  <p id="feedback">Pick the card whose most recent common ancestor with the hidden target is the newest.</p>
+  <div id="cards"></div>
+</footer>
 
 <script>
 const $ = (id) => document.getElementById(id);
-let busy = false;
+const NS = "http://www.w3.org/2000/svg";
+const COL = 215, ROW = 38, STUB = 24, BASE = 58, PAD = 132;
+let scale = 1, follow = true, busy = false;
+
+function el(name, attrs = {}) {
+  const node = document.createElementNS(NS, name);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  return node;
+}
+
+function text(x, y, value, cls, anchor) {
+  const node = el("text", { x, y, class: cls });
+  if (anchor) node.setAttribute("text-anchor", anchor);
+  node.textContent = value;
+  return node;
+}
+
+// SVG has no text wrapping, so clip to the column width by character estimate.
+function fit(value, maxPx, perChar) {
+  const max = Math.floor(maxPx / perChar);
+  return value.length <= max ? value : value.slice(0, Math.max(1, max - 1)) + "…";
+}
+
+function columns(view) {
+  const cols = [];
+  for (const stage of view.lineage) {
+    for (const tier of stage.tiers) {
+      cols.push({ stage: stage.stage_index, tier: tier.tier_index, species: tier.species });
+    }
+  }
+  return cols;
+}
+
+function renderTree(view) {
+  const host = $("stage-tree");
+  for (const old of host.querySelectorAll("svg, .empty")) old.remove();
+
+  const cols = columns(view);
+  if (!cols.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "The tree grows here as you place relatives.";
+    host.appendChild(empty);
+    return;
+  }
+
+  // Branches alternate above and below the trunk, so neighbouring columns
+  // never collide and the trunk stays centred.
+  let maxUp = 1, maxDown = 1;
+  cols.forEach((col, i) => {
+    if (i % 2 === 0) maxUp = Math.max(maxUp, col.species.length);
+    else maxDown = Math.max(maxDown, col.species.length);
+  });
+  const trunkY = 40 + BASE + maxUp * ROW;
+  const height = trunkY + BASE + maxDown * ROW + 46;
+  const width = PAD + cols.length * COL + COL + PAD;
+
+  const svg = el("svg", { viewBox: `0 0 ${width} ${height}`, width, height });
+  svg.appendChild(styleBlock());
+
+  const lastX = PAD + (cols.length - 1) * COL;
+  const endX = lastX + COL;
+
+  // Resolved trunk, then the unresolved continuation toward the target.
+  svg.appendChild(el("line", { x1: 24, y1: trunkY, x2: lastX, y2: trunkY, class: "trunk" }));
+  svg.appendChild(el("circle", { cx: 24, cy: trunkY, r: 4, class: "node" }));
+  svg.appendChild(text(24, trunkY - 14, "Life", "en"));
+  svg.appendChild(el("line", {
+    x1: lastX, y1: trunkY, x2: endX - 12, y2: trunkY,
+    class: view.completed ? "trunk" : "trunk unresolved",
+  }));
+
+  let seenStage = -1;
+  cols.forEach((col, i) => {
+    const x = PAD + i * COL;
+    const dir = i % 2 === 0 ? -1 : 1;
+
+    if (col.stage !== seenStage) {
+      seenStage = col.stage;
+      svg.appendChild(el("line", {
+        x1: x - COL / 2, y1: 14, x2: x - COL / 2, y2: height - 14, class: "divider",
+      }));
+      svg.appendChild(text(x - COL / 2 + 8, 26, `STAGE ${col.stage + 1}`, "stagelabel"));
+    }
+
+    const ys = col.species.map((_, k) => trunkY + dir * (BASE + k * ROW));
+    const far = ys[ys.length - 1];
+    svg.appendChild(el("line", { x1: x, y1: trunkY, x2: x, y2: far, class: "riser" }));
+
+    const polytomy = col.species.length > 1;
+    svg.appendChild(el("circle", {
+      cx: x, cy: trunkY, r: polytomy ? 5 : 3.5,
+      class: polytomy ? "node polytomy" : "node",
+    }));
+    svg.appendChild(text(
+      x + 7, trunkY + (dir === -1 ? 16 : -8),
+      polytomy ? `tier ${col.tier} · ${col.species.length} spp` : `tier ${col.tier}`,
+      "tierlabel",
+    ));
+
+    col.species.forEach((sp, k) => {
+      const y = ys[k];
+      svg.appendChild(el("line", { x1: x, y1: y, x2: x + STUB, y2: y, class: "branch" }));
+      svg.appendChild(el("circle", {
+        cx: x + STUB, cy: y, r: 4,
+        class: `tip ${sp.placement}${sp.role === "target" ? " target" : ""}`,
+      }));
+      const labelX = x + STUB + 9;
+      const room = COL - STUB - 22;
+      const en = text(labelX, y - 1, fit(sp.english_name, room, 6.3), `en ${sp.role}`);
+      en.appendChild(el("title")).textContent = `${sp.english_name} — ${sp.role}, ${sp.placement}`;
+      svg.appendChild(en);
+      svg.appendChild(text(labelX, y + 12, fit(sp.scientific_name, room, 5.7), "sci"));
+    });
+  });
+
+  // The endpoint: the revealed target, or the concealed continuation.
+  const targets = view.lineage.flatMap((s) => s.target);
+  if (targets.length) {
+    const sp = targets[0];
+    svg.appendChild(el("circle", { cx: endX - 12, cy: trunkY, r: 6, class: "tip target guessed" }));
+    svg.appendChild(text(endX - 12, trunkY - 16, sp.english_name, "en target", "middle"));
+    svg.appendChild(text(endX - 12, trunkY + 24, sp.scientific_name, "sci", "middle"));
+  } else {
+    svg.appendChild(text(endX - 4, trunkY + 5, "???", "unknown"));
+  }
+
+  host.appendChild(svg);
+  applyScale();
+}
+
+function styleBlock() {
+  const style = el("style");
+  style.textContent = `
+    .trunk { stroke: var(--accent); stroke-width: 2.5; }
+    .trunk.unresolved { stroke: var(--faint); stroke-dasharray: 6 6; }
+    .riser, .branch { stroke: var(--line); stroke-width: 1.6; }
+    .divider { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 6; }
+    .node { fill: var(--accent); }
+    .node.polytomy { fill: none; stroke: var(--accent); stroke-width: 2; }
+    .tip { fill: var(--bg); stroke: var(--faint); stroke-width: 2; }
+    .tip.guessed { fill: var(--accent); stroke: var(--accent); }
+    .tip.target { fill: var(--good); stroke: var(--good); }
+    text { font: 11.5px ui-sans-serif, system-ui, sans-serif; fill: var(--ink); }
+    .en { font-weight: 600; }
+    .en.mulligan { fill: var(--warn); }
+    .en.unlock, .en.target { fill: var(--good); }
+    .sci { font-size: 10px; font-style: italic; fill: var(--muted); }
+    .tierlabel, .stagelabel { font-size: 9.5px; fill: var(--muted); letter-spacing: .06em; }
+    .unknown { font-size: 15px; fill: var(--muted); font-style: italic; }
+    /* Zoomed far out, labels are unreadable noise: show structure instead. */
+    .compact .en, .compact .sci, .compact .tierlabel { display: none; }
+    .compact .stagelabel { font-size: 22px; }
+  `;
+  return style;
+}
+
+function applyScale() {
+  const svg = $("stage-tree").querySelector("svg");
+  if (!svg) return;
+  const box = svg.viewBox.baseVal;
+  svg.setAttribute("width", box.width * scale);
+  svg.setAttribute("height", box.height * scale);
+  svg.classList.toggle("compact", scale < 0.55);
+  if (follow) $("stage-tree").scrollLeft = $("stage-tree").scrollWidth;
+}
 
 function cardNode(card) {
-  const el = document.createElement("button");
-  el.className = "card";
-  el.disabled = card.state !== "active" || busy;
-  if (card.role) el.dataset.role = card.role;
+  const node = document.createElement("button");
+  node.className = "card";
+  node.disabled = card.state !== "active" || busy;
 
   const thumb = document.createElement("div");
   thumb.className = "thumb";
@@ -136,88 +315,23 @@ function cardNode(card) {
   img.loading = "lazy";
   img.alt = "";
   img.src = card.image_url;
-  // The 2022 snapshot's media host now refuses hotlinked requests, so fall
-  // back to a glyph rather than showing a broken image.
-  img.onerror = () => {
-    thumb.innerHTML = '<span class="glyph">🧬</span>';
-    if (card.role) addBadge(thumb, card);
-  };
+  // The snapshot's media host refuses hotlinked requests, so degrade to a glyph.
+  img.onerror = () => { thumb.textContent = "🧬"; };
   thumb.appendChild(img);
-  if (card.role) addBadge(thumb, card);
 
-  const body = document.createElement("div");
-  body.className = "body";
+  const meta = document.createElement("div");
+  meta.className = "meta";
   const en = document.createElement("div");
   en.className = "en";
   en.textContent = card.english_name;
   const sci = document.createElement("div");
   sci.className = "sci";
   sci.textContent = card.scientific_name;
-  body.append(en, sci);
-
-  el.append(thumb, body);
-  if (card.state === "active") el.onclick = () => guess(card.species_id);
-  return el;
-}
-
-function addBadge(thumb, card) {
-  const badge = document.createElement("span");
-  badge.className = "badge";
-  badge.textContent = card.role === "decoy" ? `tier ${card.tier_index}` : card.role;
-  thumb.appendChild(badge);
-}
-
-function renderTree(view) {
-  const tree = $("tree");
-  tree.innerHTML = "";
-  if (!view.lineage.length) {
-    tree.innerHTML = '<div class="unknown">Nothing placed yet.</div>';
-    return;
-  }
-  for (const stage of view.lineage) {
-    const head = document.createElement("div");
-    head.className = "stagehead";
-    head.textContent = `stage ${stage.stage_index + 1}`;
-    tree.appendChild(head);
-
-    const spine = document.createElement("div");
-    spine.className = "spine";
-    for (const tier of stage.tiers) {
-      const rung = document.createElement("div");
-      rung.className = "rung";
-      const label = document.createElement("div");
-      label.className = "tier";
-      label.textContent = `tier ${tier.tier_index}`;
-      rung.appendChild(label);
-      for (const sp of tier.species) rung.appendChild(leafNode(sp));
-      spine.appendChild(rung);
-    }
-    for (const sp of stage.target) {
-      const leaf = leafNode(sp);
-      leaf.classList.add("target");
-      spine.appendChild(leaf);
-    }
-    tree.appendChild(spine);
-  }
-  if (!view.completed) {
-    const q = document.createElement("div");
-    q.className = "unknown";
-    q.textContent = "??? toward the target";
-    tree.appendChild(q);
-  }
-}
-
-function leafNode(sp) {
-  const leaf = document.createElement("div");
-  leaf.className = `leaf ${sp.placement}`;
-  leaf.innerHTML = `${escapeHtml(sp.english_name)} <i>${escapeHtml(sp.scientific_name)}</i>`;
-  return leaf;
-}
-
-function escapeHtml(text) {
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
+  meta.append(en, sci);
+  node.append(thumb, meta);
+  node.title = `${card.english_name} — ${card.scientific_name}`;
+  if (card.state === "active") node.onclick = () => guess(card.species_id);
+  return node;
 }
 
 function render(view, outcome) {
@@ -227,36 +341,26 @@ function render(view, outcome) {
   $("stage").textContent = view.completed
     ? "complete"
     : `stage ${view.stage_index + 1} of ${view.stage_count}`;
-  $("prompt").innerHTML = view.completed
-    ? "<b>Game complete.</b>"
-    : view.is_ultimate
-      ? "<b>Final stage.</b> The target is on the board — find it."
-      : "<b>Which species takes us closer to the target?</b>";
 
   const cards = $("cards");
   cards.innerHTML = "";
-  for (const card of view.cards) cards.appendChild(cardNode(card));
-
+  // Only cards still in play are shown; placed ones now live on the tree.
+  for (const card of view.cards.filter((c) => c.state === "active")) {
+    cards.appendChild(cardNode(card));
+  }
   if (view.completed) {
     const again = document.createElement("button");
     again.className = "again";
     again.textContent = "Play this game again";
     again.onclick = reset;
-    cards.after(again);
+    cards.appendChild(again);
   }
 
   renderTree(view);
-  $("foot").textContent =
-    `game ${view.game_id.slice(0, 12)} · dataset ${view.dataset_version} ` +
-    `· seed ${view.seed} · stage scores ${JSON.stringify(view.stage_scores)}`;
-
-  if (outcome) {
-    describe(outcome, view);
-  } else if (view.completed) {
-    // A reload after the last guess has no transition to narrate.
-    const box = $("feedback");
-    box.className = "good";
-    box.textContent = `Final score ${view.score} of ${view.maximum}.`;
+  if (outcome) describe(outcome, view);
+  else if (view.completed) {
+    $("feedback").className = "good";
+    $("feedback").textContent = `Final score ${view.score} of ${view.maximum}.`;
   }
 }
 
@@ -264,26 +368,27 @@ function describe(outcome, view) {
   const box = $("feedback");
   box.className = "";
   const revealed = outcome.placed.filter((p) => p.placement === "revealed").length;
-  let text;
   if (outcome.game_completed) {
-    text = `That was the target. Final score ${view.score} of ${view.maximum}.`;
     box.classList.add("good");
+    box.textContent = `That was the target. Final score ${view.score} of ${view.maximum}.`;
   } else if (outcome.stage_completed) {
-    text = `Correct — the deepest branch. Stage scored ${outcome.stage_score}. Descending.`;
     box.classList.add("good");
+    box.textContent =
+      `Correct — the deepest branch. Stage scored ${outcome.stage_score}. Descending.`;
   } else if (outcome.role === "mulligan") {
-    text = `So close — second deepest. +1 bonus cancels the guess, so this costs you nothing. ${outcome.remaining} card(s) left.`;
     box.classList.add("good");
+    box.textContent =
+      `So close — second deepest. The +1 bonus cancels the guess, so this costs nothing. ` +
+      `${outcome.remaining} card(s) left.`;
   } else {
-    text =
+    box.classList.add("cost");
+    box.textContent =
       `More distant than the answer. −${outcome.penalty} ` +
       (revealed
         ? `(itself plus ${revealed} relative(s) it exposed as more distant). `
         : "(nothing else was exposed). ") +
       `${outcome.remaining} card(s) left.`;
-    box.classList.add("cost");
   }
-  box.textContent = text;
 }
 
 async function guess(speciesId) {
@@ -296,10 +401,7 @@ async function guess(speciesId) {
       body: JSON.stringify({ species_id: speciesId }),
     });
     const data = await res.json();
-    if (!res.ok) {
-      $("feedback").textContent = data.error;
-      return;
-    }
+    if (!res.ok) { $("feedback").textContent = data.error; return; }
     busy = false;
     render(data.view, data.outcome);
   } finally {
@@ -315,7 +417,23 @@ async function reset() {
   render(data.view);
 }
 
-fetch("/api/view").then((r) => r.json()).then((view) => render(view));
+$("zoom-in").onclick = () => { scale = Math.min(2, scale + 0.15); applyScale(); };
+$("zoom-out").onclick = () => { scale = Math.max(0.25, scale - 0.15); applyScale(); };
+$("fit").onclick = () => {
+  const svg = $("stage-tree").querySelector("svg");
+  if (!svg) return;
+  follow = false;
+  $("follow").setAttribute("aria-pressed", "false");
+  scale = ($("stage-tree").clientWidth - 24) / svg.viewBox.baseVal.width;
+  applyScale();
+};
+$("follow").onclick = () => {
+  follow = !follow;
+  $("follow").setAttribute("aria-pressed", String(follow));
+  if (follow) { scale = 1; applyScale(); }
+};
+
+fetch("/api/view").then((r) => r.json()).then(render);
 </script>
 </body>
 </html>

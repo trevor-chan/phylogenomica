@@ -236,6 +236,15 @@ resolved by the gameplay engine over a small JSON API, and the API is
 stage-scoped, so a card's tier and role reach the browser only once that card
 has been placed. The concealed target never crosses the wire early.
 
+The cladogram is the board. It grows left to right from the root toward the
+target, one column per placed tier, with the open stage's cards in a row along
+the bottom. A solid trunk is resolved structure and a dashed one is the
+concealed continuation; a filled tip is a relationship you inferred and a
+hollow one was revealed to you; same-tier relatives branch from a single node
+as a rake, so the display never implies an order the topology does not support.
+`Follow` keeps the active end in view, `Fit all` frames the whole game, and
+zooming far out drops the labels to leave a structural overview.
+
 Cards currently render without images. The historical snapshot's stored
 `media.eol.org` URLs now answer with a Cloudflare bot interstitial rather than
 image bytes, so each card falls back to a placeholder glyph; names and

@@ -337,6 +337,12 @@ All stage results extend one persistent cladogram. The display distinguishes:
 The view can zoom toward the active branch while retaining access to the full
 history. Divergence ages are optional labels and never determine correctness.
 
+The prototype encodes each distinction with a separate visual channel, so none
+of them has to be inferred from another: stroke style carries resolved versus
+unresolved, tip fill carries inferred versus revealed, and a polytomy is a rake
+from one trunk node rather than a nested sequence. Only placed species are
+drawn, so the board cannot disclose the open stage's answer.
+
 ## Endgame
 
 Clicking the target in the final stage ends the game. The initial endgame then:
