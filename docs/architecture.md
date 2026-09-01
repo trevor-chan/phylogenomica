@@ -98,15 +98,20 @@ eligible target; explicit-target and serialized-game modes retain the current
 target. The new game replaces the session atomically only after generation
 succeeds.
 
-The cladogram is the interface. An SVG trunk runs left to right from the root
-to the target, one column per placed tier, with branches alternating above and
-below so neighbouring columns never collide. Cards for the open stage occupy a
-single row beneath it. The four distinctions the design requires are encoded
-independently: stroke style separates resolved from unresolved, tip fill
-separates inferred from revealed, a shared trunk node renders a polytomy as a
-rake with no implied order, and the dashed trunk ending in `???` is the
-concealed continuation. The tree is built only from placed species, so it
-cannot leak the open stage's answer.
+The cladogram is the interface. Its SVG is a rooted rectangular tree growing
+left to right: tiers are nested branching events, while every species is a
+terminal leaf on one right-hand boundary. A tier with several relatives is one
+rake/polytomy rather than a sequence of invented splits. Completed stages use
+narrow horizontal bands and compact, tooltip-labelled leaves; the current
+stage receives the remaining width and height plus readable species labels.
+The SVG dimensions follow the board viewport, so normal play remains within a
+single screen rather than growing with the lineage. Optional clade names and
+divergence ages label current-stage internal nodes but never affect layout or
+correctness. Cards for the open stage occupy a separate row beneath the board.
+Stroke style separates resolved from unresolved, tip fill separates inferred
+from revealed, a hollow internal node marks a polytomy, and a dashed terminal
+branch marks the concealed continuation. The tree is built only from placed
+species, so it cannot leak the open stage's answer.
 
 Developer scripts in `scripts/` call these modules but contain no reusable
 business logic. A future API and frontend should be separate layers rather than
@@ -305,6 +310,7 @@ Game
     ├── tiers[]
     │   ├── source_node_id
     │   ├── age_ma
+    │   ├── clade_name
     │   └── relative_ids[]
     ├── mulligan_species_id
     ├── unlock_species_id (transition stages only)
@@ -360,19 +366,19 @@ subordinate to topology and avoids turning recognizability into an eligibility
 rule. The output contains 49 role-assigned relatives; the global target supplies
 the tenth member of the ultimate stage during game assembly.
 
-Game generator version 2 implements steps 6–7 as the immutable `GeneratedGame`
+Game generator version 3 implements steps 6–7 as the immutable `GeneratedGame`
 above. It resolves cards, appends the target to the ultimate stage, records
-each stage's backbone boundary nodes and divergence ages, shuffles members, and
-validates.
+each stage's backbone boundary nodes, divergence ages, and optional clade
+names, shuffles members, and validates.
 
-Game schema version 2 added `age_ma` to every tier. Divergence ages are display
-metadata and never affect correctness, but they are stored on the game rather
-than looked up at render time so a serialized game stays self-contained and one
-puzzle always carries one set of ages. Because the generator now emits
-different content, its version moved to 2, which changes every `game_id` and
-every stage shuffle; version 1 games are refused on load rather than
-reinterpreted. Selection is unaffected, since the relative selector seeds from
-its own version.
+Game schema version 2 added `age_ma` to every tier; version 3 adds the optional
+normalized node `scientific_name` as `clade_name`. Both are display metadata
+and never affect correctness, but they are stored on the game rather than
+looked up at render time so a serialized game stays self-contained. Because
+the generator now emits different content, its version also moved to 3, which
+changes every `game_id` and every stage shuffle; earlier games are refused on
+load rather than reinterpreted. Selection is unaffected, since the relative
+selector seeds from its own version.
 
 Ages are sparse — roughly 46% of tiers carry one on the historical snapshot —
 so a missing age is `None` rather than a defect. Validation checks that ages

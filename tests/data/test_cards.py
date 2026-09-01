@@ -22,6 +22,11 @@ CREATE TABLE leaves (
     ott_id INTEGER,
     popularity_rank INTEGER
 );
+CREATE TABLE nodes (
+    node_id INTEGER PRIMARY KEY,
+    scientific_name TEXT,
+    age_ma REAL
+);
 CREATE TABLE vernacular_names (
     source_table TEXT NOT NULL,
     source_row_id INTEGER NOT NULL,
@@ -527,3 +532,20 @@ def test_wraps_sqlite_failures_during_resolution(tmp_path: Path) -> None:
         CardMetadataError, match="cannot read normalized card metadata"
     ):
         store.resolve([1])
+
+
+def test_resolves_optional_normalized_clade_names(tmp_path: Path) -> None:
+    def build(connection: sqlite3.Connection) -> None:
+        connection.executemany(
+            "INSERT INTO nodes VALUES (?, ?, ?)",
+            ((1, " Mammalia ", 10.0), (2, None, None), (3, "", 3.0)),
+        )
+
+    with _store(tmp_path, build) as store:
+        assert store.clade_names([3, 1, 2, 1]) == {
+            1: "Mammalia",
+            2: None,
+            3: None,
+        }
+        with pytest.raises(CardMetadataError, match="unknown ancestor node IDs"):
+            store.clade_names([4])

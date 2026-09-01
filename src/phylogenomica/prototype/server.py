@@ -120,11 +120,20 @@ def _lineage(game: GeneratedGame, state: GameState) -> list[dict[str, object]]:
         for stage in game.stages
         for tier in stage.tiers
     }
+    clade_names = {
+        tier.ancestor_node_id: tier.clade_name
+        for stage in game.stages
+        for tier in stage.tiers
+    }
     age_by_tier: dict[int, float | None] = {}
+    clade_name_by_tier: dict[int, str | None] = {}
     stages: dict[int, dict[int | None, list[dict[str, object]]]] = {}
     for placed in state.placements:
         if placed.tier_index is not None:
             age_by_tier[placed.tier_index] = ages.get(placed.ancestor_node_id)
+            clade_name_by_tier[placed.tier_index] = clade_names.get(
+                placed.ancestor_node_id
+            )
         tiers = stages.setdefault(placed.stage_index, {})
         tiers.setdefault(placed.tier_index, []).append(
             {
@@ -142,6 +151,7 @@ def _lineage(game: GeneratedGame, state: GameState) -> list[dict[str, object]]:
                 {
                     "tier_index": tier_index,
                     "age_ma": age_by_tier.get(tier_index),
+                    "clade_name": clade_name_by_tier.get(tier_index),
                     "species": tiers[tier_index],
                 }
                 for tier_index in sorted(

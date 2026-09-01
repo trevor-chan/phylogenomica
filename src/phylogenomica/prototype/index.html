@@ -4,11 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Phylogenomica</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Solway:wght@300;400;500;700;800&amp;display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #0e1218; --panel: #161c25; --line: #253044; --ink: #e7ecf3;
     --muted: #8f9cb0; --faint: #4a5568; --accent: #6ea8fe;
     --good: #58c98a; --warn: #e0a458;
+    --font: "Solway", Georgia, serif;
   }
   @media (prefers-color-scheme: light) {
     :root {
@@ -21,7 +25,7 @@
   html, body { height: 100%; }
   body {
     margin: 0; background: var(--bg); color: var(--ink);
-    font: 15px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font: 15px/1.45 var(--font);
     display: flex; flex-direction: column; overflow: hidden;
   }
 
@@ -138,8 +142,11 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const NS = "http://www.w3.org/2000/svg";
-const COL = 215, ROW = 38, STUB = 24, BASE = 58, PAD = 132;
+const MIN_TREE_WIDTH = 720, LABEL_WIDTH = 250;
+const BRANCH_LEFT = 72, TREE_TOP = 50, TREE_BOTTOM = 44;
+const HISTORY_STAGE_WIDTH = 76;
 let scale = 1, follow = true, busy = false;
+let currentView = null, resizeTimer = null;
 
 function el(name, attrs = {}) {
   const node = document.createElementNS(NS, name);
@@ -174,7 +181,7 @@ function columns(view) {
     for (const tier of stage.tiers) {
       cols.push({
         stage: stage.stage_index, tier: tier.tier_index,
-        age: tier.age_ma, species: tier.species,
+        age: tier.age_ma, clade: tier.clade_name, species: tier.species,
       });
     }
   }
@@ -185,8 +192,8 @@ function renderTree(view) {
   const host = $("stage-tree");
   for (const old of host.querySelectorAll("svg, .empty")) old.remove();
 
-  const cols = columns(view);
-  if (!cols.length) {
+  const tiers = columns(view);
+  if (!tiers.length) {
     const empty = document.createElement("div");
     empty.className = "empty";
     empty.textContent = "The tree grows here as you place relatives.";
@@ -194,109 +201,213 @@ function renderTree(view) {
     return;
   }
 
-  // Branches alternate above and below the trunk, so neighbouring columns
-  // never collide and the trunk stays centred.
-  let maxUp = 1, maxDown = 1;
-  cols.forEach((col, i) => {
-    if (i % 2 === 0) maxUp = Math.max(maxUp, col.species.length);
-    else maxDown = Math.max(maxDown, col.species.length);
-  });
-  const trunkY = 40 + BASE + maxUp * ROW;
-  const height = trunkY + BASE + maxDown * ROW + 46;
-  const width = PAD + cols.length * COL + COL + PAD;
+  const targets = view.lineage.flatMap((stage) => stage.target);
+  const target = targets.length ? targets[0] : null;
+  const focusStage = view.completed ? view.stage_count - 1 : view.stage_index;
+  const width = Math.max(MIN_TREE_WIDTH, host.clientWidth || MIN_TREE_WIDTH);
+  const height = Math.max(360, host.clientHeight || 520);
+  const leafX = width - LABEL_WIDTH;
+  const branchRight = leafX - 38;
+  const branchWidth = branchRight - BRANCH_LEFT;
+  const historyStageCount = focusStage;
+  const historyWidth = historyStageCount
+    ? Math.min(branchWidth * 0.42, historyStageCount * HISTORY_STAGE_WIDTH)
+    : 0;
+  const historyStageWidth = historyStageCount
+    ? historyWidth / historyStageCount
+    : 0;
+  const focusWidth = branchWidth - historyWidth;
+
+  // Completed stages are narrow historical bands. The current stage receives
+  // the rest of the horizontal branching space, regardless of how deep its
+  // selected tier indexes happen to be in the generator's internal model.
+  const layout = tiers.map((tier) => ({
+    ...tier,
+    leaves: tier.species.map((species) => ({ species })),
+  }));
+  const stageBands = [];
+  let stageStart = BRANCH_LEFT;
+  for (let stage = 0; stage <= focusStage; stage++) {
+    const stageWidth = stage < focusStage ? historyStageWidth : focusWidth;
+    const stageTiers = layout.filter((tier) => tier.stage === stage);
+    stageTiers.forEach((tier, index) => {
+      tier.x = stageStart + stageWidth * (index + 1) / (stageTiers.length + 1);
+    });
+    stageBands.push({ stage, start: stageStart, end: stageStart + stageWidth });
+    stageStart += stageWidth;
+  }
+
+  // Terminal leaves share one right-hand boundary. Historical species occupy
+  // a shallow compressed band; the focus stage gets the remaining height and
+  // readable labels.
+  const historyLeaves = layout
+    .filter((tier) => tier.stage < focusStage)
+    .flatMap((tier) => tier.leaves);
+  const focusLeaves = layout
+    .filter((tier) => tier.stage === focusStage)
+    .flatMap((tier) => tier.leaves);
+  const endpoint = { y: 0 };
+  const historyEnd = historyLeaves.length
+    ? Math.min(TREE_TOP + height * 0.24, height - TREE_BOTTOM - 150)
+    : TREE_TOP;
+  distributeLeaves(historyLeaves, TREE_TOP, historyEnd);
+  const focusStart = historyLeaves.length ? historyEnd + 28 : TREE_TOP;
+  distributeLeaves([...focusLeaves, endpoint], focusStart, height - TREE_BOTTOM);
+
+  // Work back from the hidden target. Internal nodes sit midway between their
+  // outermost children, producing a conventional rectangular cladogram.
+  let continuationY = endpoint.y;
+  for (let i = layout.length - 1; i >= 0; i--) {
+    const childYs = layout[i].leaves.map((leaf) => leaf.y);
+    childYs.push(continuationY);
+    layout[i].continuationY = continuationY;
+    layout[i].nodeY = (Math.min(...childYs) + Math.max(...childYs)) / 2;
+    continuationY = layout[i].nodeY;
+  }
 
   const svg = el("svg", { viewBox: `0 0 ${width} ${height}`, width, height });
   svg.appendChild(styleBlock());
 
-  const lastX = PAD + (cols.length - 1) * COL;
-  const endX = lastX + COL;
-
-  // Resolved trunk, then the unresolved continuation toward the target.
-  svg.appendChild(el("line", { x1: 24, y1: trunkY, x2: lastX, y2: trunkY, class: "trunk" }));
-  svg.appendChild(el("circle", { cx: 24, cy: trunkY, r: 4, class: "node" }));
-  svg.appendChild(text(24, trunkY - 14, "Life", "en"));
-  svg.appendChild(el("line", {
-    x1: lastX, y1: trunkY, x2: endX - 12, y2: trunkY,
-    class: view.completed ? "trunk" : "trunk unresolved",
-  }));
-
-  let seenStage = -1;
-  cols.forEach((col, i) => {
-    const x = PAD + i * COL;
-    const dir = i % 2 === 0 ? -1 : 1;
-
-    if (col.stage !== seenStage) {
-      seenStage = col.stage;
-      svg.appendChild(el("line", {
-        x1: x - COL / 2, y1: 14, x2: x - COL / 2, y2: height - 14, class: "divider",
-      }));
-      svg.appendChild(text(x - COL / 2 + 8, 26, `STAGE ${col.stage + 1}`, "stagelabel"));
-    }
-
-    const ys = col.species.map((_, k) => trunkY + dir * (BASE + k * ROW));
-    const far = ys[ys.length - 1];
-    svg.appendChild(el("line", { x1: x, y1: trunkY, x2: x, y2: far, class: "riser" }));
-
-    const polytomy = col.species.length > 1;
-    svg.appendChild(el("circle", {
-      cx: x, cy: trunkY, r: polytomy ? 5 : 3.5,
-      class: polytomy ? "node polytomy" : "node",
+  stageBands.forEach((band) => {
+    const active = band.stage === focusStage;
+    svg.appendChild(el("line", {
+      x1: band.start + 5, y1: 34, x2: band.end - 5, y2: 34,
+      class: active ? "stage-bracket active" : "stage-bracket",
     }));
-    let label = polytomy
-      ? `tier ${col.tier} · ${col.species.length} spp`
-      : `tier ${col.tier}`;
-    if (col.age !== null && col.age !== undefined) label += ` · ${formatAge(col.age)}`;
-    svg.appendChild(text(x + 7, trunkY + (dir === -1 ? 16 : -8), label, "tierlabel"));
-
-    col.species.forEach((sp, k) => {
-      const y = ys[k];
-      svg.appendChild(el("line", { x1: x, y1: y, x2: x + STUB, y2: y, class: "branch" }));
-      svg.appendChild(el("circle", {
-        cx: x + STUB, cy: y, r: 4,
-        class: `tip ${sp.placement}${sp.role === "target" ? " target" : ""}`,
-      }));
-      const labelX = x + STUB + 9;
-      const room = COL - STUB - 22;
-      const en = text(labelX, y - 1, fit(sp.english_name, room, 6.3), `en ${sp.role}`);
-      en.appendChild(el("title")).textContent = `${sp.english_name} — ${sp.role}, ${sp.placement}`;
-      svg.appendChild(en);
-      svg.appendChild(text(labelX, y + 12, fit(sp.scientific_name, room, 5.7), "sci"));
-    });
+    svg.appendChild(text(
+      (band.start + band.end) / 2, 24, `STAGE ${band.stage + 1}`,
+      active ? "stagelabel active" : "stagelabel", "middle",
+    ));
   });
 
-  // The endpoint: the revealed target, or the concealed continuation.
-  const targets = view.lineage.flatMap((s) => s.target);
-  if (targets.length) {
-    const sp = targets[0];
-    svg.appendChild(el("circle", { cx: endX - 12, cy: trunkY, r: 6, class: "tip target guessed" }));
-    svg.appendChild(text(endX - 12, trunkY - 16, sp.english_name, "en target", "middle"));
-    svg.appendChild(text(endX - 12, trunkY + 24, sp.scientific_name, "sci", "middle"));
+  const root = layout[0];
+  svg.appendChild(el("line", {
+    x1: 22, y1: root.nodeY, x2: root.x, y2: root.nodeY, class: "edge",
+  }));
+  svg.appendChild(text(22, root.nodeY - 10, "Life", "en"));
+
+  layout.forEach((tier, i) => {
+    const childYs = tier.leaves.map((leaf) => leaf.y);
+    childYs.push(tier.continuationY);
+    const topY = Math.min(...childYs);
+    const bottomY = Math.max(...childYs);
+
+    // All children at one tier leave the same branching event.
+    svg.appendChild(el("line", {
+      x1: tier.x, y1: topY, x2: tier.x, y2: bottomY, class: "edge branch-event",
+    }));
+    const polytomy = tier.leaves.length > 1;
+    const branchNode = el("circle", {
+      cx: tier.x, cy: tier.nodeY, r: polytomy ? 5 : 3.5,
+      class: polytomy ? "node polytomy" : "node",
+    });
+    svg.appendChild(branchNode);
+    const labelParts = [];
+    if (tier.clade) labelParts.push(tier.clade);
+    if (tier.age !== null && tier.age !== undefined) labelParts.push(formatAge(tier.age));
+    if (labelParts.length) {
+      const fullLabel = labelParts.join(" · ");
+      branchNode.appendChild(el("title")).textContent = fullLabel;
+      const labelNode = text(
+        tier.x + 7, tier.nodeY - 7, fit(fullLabel, 180, 5.8),
+        tier.stage < focusStage ? "tierlabel history" : "tierlabel",
+      );
+      labelNode.appendChild(el("title")).textContent = fullLabel;
+      svg.appendChild(labelNode);
+    }
+
+    tier.leaves.forEach(({ species, y }) => {
+      svg.appendChild(el("line", {
+        x1: tier.x, y1: y, x2: leafX, y2: y, class: "edge",
+      }));
+      svg.appendChild(el("circle", {
+        cx: leafX, cy: y, r: tier.stage < focusStage ? 2.5 : 4,
+        class: `tip ${species.placement}${species.role === "target" ? " target" : ""}`,
+      }));
+      if (tier.stage === focusStage) appendLeafLabel(svg, leafX, y, species);
+      else appendLeafTitle(svg, leafX, y, species);
+    });
+
+    // The continuing child is the next nested branching event. The last one
+    // reaches either the target or a deliberately unresolved endpoint.
+    if (i < layout.length - 1) {
+      svg.appendChild(el("line", {
+        x1: tier.x, y1: tier.continuationY,
+        x2: layout[i + 1].x, y2: tier.continuationY, class: "edge",
+      }));
+    }
+  });
+
+  const lastTier = layout[layout.length - 1];
+  svg.appendChild(el("line", {
+    x1: lastTier.x, y1: endpoint.y, x2: leafX, y2: endpoint.y,
+    class: target ? "edge" : "edge unresolved",
+  }));
+  if (target) {
+    svg.appendChild(el("circle", {
+      cx: leafX, cy: endpoint.y, r: 6, class: "tip target guessed",
+    }));
+    appendLeafLabel(svg, leafX, endpoint.y, target);
   } else {
-    svg.appendChild(text(endX - 4, trunkY + 5, "???", "unknown"));
+    svg.appendChild(el("circle", {
+      cx: leafX, cy: endpoint.y, r: 5, class: "tip unknown-tip",
+    }));
+    svg.appendChild(text(leafX + 10, endpoint.y + 4, "hidden continuation", "unknown"));
   }
 
   host.appendChild(svg);
   applyScale();
 }
 
+function distributeLeaves(leaves, start, end) {
+  if (!leaves.length) return;
+  if (leaves.length === 1) {
+    leaves[0].y = (start + end) / 2;
+    return;
+  }
+  leaves.forEach((leaf, index) => {
+    leaf.y = start + (end - start) * index / (leaves.length - 1);
+  });
+}
+
+function appendLeafLabel(svg, x, y, species) {
+  const en = text(x + 10, y - 2, fit(species.english_name, 225, 6.3), `en ${species.role}`);
+  en.appendChild(el("title")).textContent =
+    `${species.english_name} — ${species.role}, ${species.placement}`;
+  svg.appendChild(en);
+  svg.appendChild(text(x + 10, y + 11, fit(species.scientific_name, 225, 5.7), "sci"));
+}
+
+function appendLeafTitle(svg, x, y, species) {
+  const hit = el("circle", { cx: x, cy: y, r: 7, class: "history-hit" });
+  hit.appendChild(el("title")).textContent =
+    `${species.english_name} — ${species.scientific_name}`;
+  svg.appendChild(hit);
+}
+
 function styleBlock() {
   const style = el("style");
   style.textContent = `
-    .trunk { stroke: var(--accent); stroke-width: 2.5; }
-    .trunk.unresolved { stroke: var(--faint); stroke-dasharray: 6 6; }
-    .riser, .branch { stroke: var(--line); stroke-width: 1.6; }
-    .divider { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 6; }
+    .edge { stroke: var(--line); stroke-width: 1.8; fill: none; }
+    .edge.unresolved { stroke: var(--faint); stroke-dasharray: 6 6; }
+    .branch-event { stroke: var(--accent); stroke-width: 2.2; }
     .node { fill: var(--accent); }
     .node.polytomy { fill: none; stroke: var(--accent); stroke-width: 2; }
     .tip { fill: var(--bg); stroke: var(--faint); stroke-width: 2; }
     .tip.guessed { fill: var(--accent); stroke: var(--accent); }
     .tip.target { fill: var(--good); stroke: var(--good); }
-    text { font: 11.5px ui-sans-serif, system-ui, sans-serif; fill: var(--ink); }
+    .tip.unknown-tip { fill: var(--bg); stroke-dasharray: 2 2; }
+    .history-hit { fill: transparent; stroke: none; }
+    .stage-bracket { stroke: var(--line); stroke-width: 1.2; }
+    .stage-bracket.active { stroke: var(--accent); stroke-width: 2; }
+    text { font: 11.5px var(--font); fill: var(--ink); }
     .en { font-weight: 600; }
     .en.mulligan { fill: var(--warn); }
     .en.unlock, .en.target { fill: var(--good); }
     .sci { font-size: 10px; font-style: italic; fill: var(--muted); }
-    .tierlabel, .stagelabel { font-size: 9.5px; fill: var(--muted); letter-spacing: .06em; }
+    .tierlabel, .stagelabel { font-size: 9.5px; fill: var(--muted); letter-spacing: .04em; }
+    .tierlabel.history { display: none; }
+    .stagelabel.active { fill: var(--accent); font-weight: 700; }
     .unknown { font-size: 15px; fill: var(--muted); font-style: italic; }
     /* Zoomed far out, labels are unreadable noise: show structure instead. */
     .compact .en, .compact .sci, .compact .tierlabel { display: none; }
@@ -312,7 +423,10 @@ function applyScale() {
   svg.setAttribute("width", box.width * scale);
   svg.setAttribute("height", box.height * scale);
   svg.classList.toggle("compact", scale < 0.55);
-  if (follow) $("stage-tree").scrollLeft = $("stage-tree").scrollWidth;
+  if (follow) {
+    $("stage-tree").scrollLeft = $("stage-tree").scrollWidth;
+    $("stage-tree").scrollTop = $("stage-tree").scrollHeight;
+  }
 }
 
 function cardNode(card) {
@@ -346,6 +460,7 @@ function cardNode(card) {
 }
 
 function render(view, outcome) {
+  currentView = view;
   $("score").textContent = view.score;
   $("stake").textContent = view.stage_at_stake;
   $("best").textContent = `${view.best_achievable}/${view.maximum}`;
@@ -445,7 +560,9 @@ $("fit").onclick = () => {
   if (!svg) return;
   follow = false;
   $("follow").setAttribute("aria-pressed", "false");
-  scale = ($("stage-tree").clientWidth - 24) / svg.viewBox.baseVal.width;
+  const widthScale = ($("stage-tree").clientWidth - 24) / svg.viewBox.baseVal.width;
+  const heightScale = ($("stage-tree").clientHeight - 24) / svg.viewBox.baseVal.height;
+  scale = Math.min(widthScale, heightScale);
   applyScale();
 };
 $("follow").onclick = () => {
@@ -453,6 +570,13 @@ $("follow").onclick = () => {
   $("follow").setAttribute("aria-pressed", String(follow));
   if (follow) { scale = 1; applyScale(); }
 };
+
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (currentView) renderTree(currentView);
+  }, 100);
+});
 
 fetch("/api/view").then((r) => r.json()).then(render);
 </script>

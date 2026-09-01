@@ -162,6 +162,15 @@ WHERE c.age_ma IS NOT NULL AND p.age_ma IS NOT NULL;
 Generation therefore enforces non-increasing ages along a game's tiers, with
 ties allowed. Ages are display metadata and never determine correctness.
 
+#### Internal clade names are optional
+
+OneZoom's normalized `nodes.scientific_name` supplies the player-facing clade
+label for a branching point. In snapshot `27400288`, 135,439 of 2,235,075
+internal nodes have a nonblank name. The generator therefore records
+`clade_name` as optional display metadata and the prototype simply omits the
+name where the source node is unnamed; it never substitutes the internal tier
+index.
+
 ### Vernacular names
 
 The initial preference order is OneZoom, then ID-based Wikidata/Wikipedia

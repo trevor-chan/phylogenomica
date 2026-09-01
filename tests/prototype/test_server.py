@@ -73,6 +73,7 @@ def _stage(stage_index: int, specs, *, target_id: int | None = None):
                 role=m.role,  # type: ignore[arg-type]
                 species_ids=(m.species_id,),
                 age_ma=float(500 - m.tier_index * 10),
+                clade_name=f"Clade {m.tier_index}",
             )
             for m in relatives
         ),
@@ -258,6 +259,8 @@ def test_serves_the_page_and_the_view(server: str) -> None:
     status, page = _get(server, "/")
     assert status == 200
     assert b"<title>Phylogenomica</title>" in page
+    assert b"fonts.googleapis.com" in page
+    assert b"Solway" in page
     assert page == PAGE_PATH.read_bytes()
     # The tree is the board, so its container and controls must be present.
     for marker in (b'id="stage-tree"', b'id="cards"', b'id="fit"', b'id="follow"'):
@@ -454,6 +457,19 @@ def test_reports_divergence_ages_on_placed_tiers() -> None:
     ]
     ages = [t["age_ma"] for t in tiers]
     assert ages == sorted(ages, reverse=True)
+
+
+def test_reports_clade_names_on_placed_tiers() -> None:
+    game = _game()
+    state, _ = replay(game, [MULLIGAN_A, UNLOCK])
+
+    tiers = build_view(game, state)["lineage"][0]["tiers"]
+
+    assert [(t["tier_index"], t["clade_name"]) for t in tiers] == [
+        (0, "Clade 0"),
+        (1, "Clade 1"),
+        (2, "Clade 2"),
+    ]
 
 
 def test_reports_a_missing_divergence_age_as_null() -> None:

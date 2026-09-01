@@ -44,8 +44,8 @@ from phylogenomica.tree.preprocess import (
 )
 from phylogenomica.tree.query import BiologicalTree, TaxonRef, TreeQueryError
 
-GAME_SCHEMA_VERSION = 2
-GAME_GENERATOR_VERSION = 2
+GAME_SCHEMA_VERSION = 3
+GAME_GENERATOR_VERSION = 3
 
 GameRole = Literal["decoy", "mulligan", "unlock", "target"]
 MEMBER_ROLES = frozenset(("decoy", "mulligan", "unlock", "target"))
@@ -72,6 +72,7 @@ class GameTier:
     role: Literal["decoy", "mulligan", "unlock"]
     species_ids: tuple[int, ...]
     age_ma: float | None
+    clade_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -127,6 +128,7 @@ def _game_member_from_dict(payload: Mapping[str, object]) -> GameMember:
 
 
 def _game_tier_from_dict(payload: Mapping[str, object]) -> GameTier:
+    clade_name = payload["clade_name"]
     return GameTier(
         tier_index=int(payload["tier_index"]),  # type: ignore[arg-type]
         ancestor_node_id=int(payload["ancestor_node_id"]),  # type: ignore[arg-type]
@@ -135,6 +137,7 @@ def _game_tier_from_dict(payload: Mapping[str, object]) -> GameTier:
         age_ma=(
             None if payload["age_ma"] is None else float(payload["age_ma"])  # type: ignore[arg-type]
         ),
+        clade_name=None if clade_name is None else str(clade_name),
     )
 
 
@@ -285,6 +288,7 @@ def _member_from_relative(
 def _game_tiers(
     relatives: Sequence[SelectedRelative],
     ages: Mapping[int, float | None],
+    clade_names: Mapping[int, str | None],
 ) -> tuple[GameTier, ...]:
     grouped: dict[tuple[int, int, str], list[int]] = {}
     for relative in relatives:
@@ -297,6 +301,7 @@ def _game_tiers(
             role=role,  # type: ignore[arg-type]
             species_ids=tuple(sorted(species_ids)),
             age_ma=ages.get(ancestor_node_id),
+            clade_name=clade_names.get(ancestor_node_id),
         )
         for (tier_index, ancestor_node_id, role), species_ids in sorted(
             grouped.items()
@@ -380,6 +385,11 @@ def _validate_stage_continuity(
                     raise GameGenerationError("divergence age is not finite")
                 if tier.age_ma < 0:
                     raise GameGenerationError("divergence age is negative")
+            if tier.clade_name is not None and (
+                not tier.clade_name.strip()
+                or tier.clade_name != tier.clade_name.strip()
+            ):
+                raise GameGenerationError("clade name is blank or unnormalized")
             # Tier indexes are unique per stage and strictly increasing across
             # them, so each one is seen exactly once here.
             age_by_tier[tier.tier_index] = tier.age_ma
@@ -467,7 +477,10 @@ def _validate_stage_roles(stage: GeneratedStage) -> None:
     # declared here and checked for consistency and ordering by the continuity
     # pass, which sees every tier in the game at once.
     declared_ages = {tier.ancestor_node_id: tier.age_ma for tier in stage.tiers}
-    if stage.tiers != _game_tiers(relatives, declared_ages):
+    declared_names = {
+        tier.ancestor_node_id: tier.clade_name for tier in stage.tiers
+    }
+    if stage.tiers != _game_tiers(relatives, declared_ages, declared_names):
         raise GameGenerationError("game tier projection does not match members")
 
     for role, attribute in (
@@ -635,6 +648,13 @@ def assemble_game(
                     for relative in stage.relatives
                 ]
             )
+            clade_names = metadata.clade_names(
+                [
+                    relative.ancestor_node_id
+                    for stage in selection.stages
+                    for relative in stage.relatives
+                ]
+            )
         with BiologicalTree.open(tree_database) as tree:
             backbone_node_ids = tree.lineage_node_ids(
                 TaxonRef("leaf", selection.target_id)
@@ -648,7 +668,7 @@ def assemble_game(
             _member_from_relative(relative, cards)
             for relative in selected_stage.relatives
         ]
-        tiers = _game_tiers(selected_stage.relatives, ages)
+        tiers = _game_tiers(selected_stage.relatives, ages, clade_names)
         is_ultimate = selected_stage.stage_index == len(selection.stages) - 1
         if is_ultimate:
             canonical_members.append(

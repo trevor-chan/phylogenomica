@@ -183,7 +183,7 @@ phylogenomica-generate-game 887269 \
   --output data/processed/onezoom/27400288/games/human-seed-42.json
 ```
 
-Game generator version 1 resolves one player-facing card per species from the
+Game generator version 3 resolves one player-facing card per species from the
 normalized metadata, adds the target as a normal selectable card in the
 ultimate stage, shuffles each stage on its own seeded stream, and runs every
 generated-game validator before returning. A card requires a scientific name, a
@@ -191,11 +191,12 @@ preferred English vernacular name, and an `overall_best_any` image with
 nonempty URL, rights, and licence; OTT-keyed records take precedence over
 name-keyed records, and ties resolve by source table and row ID.
 
-Game schema version 2 stores each tier's divergence age (`age_ma`) on the game
-itself, so a serialized game is self-contained. Ages are display metadata and
-never affect correctness; roughly 46% of tiers carry one, and generation checks
-that the ages present never increase toward the target. Games written by the
-version 1 generator are refused on load and must be regenerated.
+Game schema version 3 stores each tier's divergence age (`age_ma`) and optional
+scientific clade name (`clade_name`) on the game itself, so a serialized game
+is self-contained. Both are display metadata and never affect correctness;
+roughly 46% of tiers carry an age, and generation checks that the ages present
+never increase toward the target. Games written under earlier schemas are
+refused on load and must be regenerated.
 
 The game ID is a SHA-256 digest of the dataset version, generator and selector
 versions, target, complete configuration, and seed. Identical inputs reproduce
@@ -262,16 +263,17 @@ resolved by the gameplay engine over a small JSON API, and the API is
 stage-scoped, so a card's tier and role reach the browser only once that card
 has been placed. The concealed target never crosses the wire early.
 
-The cladogram is the board. It grows left to right from the root toward the
-target, one column per placed tier, with the open stage's cards in a row along
-the bottom. A solid trunk is resolved structure and a dashed one is the
-concealed continuation; a filled tip is a relationship you inferred and a
-hollow one was revealed to you; same-tier relatives branch from a single node
-as a rake, so the display never implies an order the topology does not support.
-`Follow` keeps the active end in view, `Fit all` frames the whole game, and
-zooming far out drops the labels to leave a structural overview. Tiers whose
-divergence age is known are labelled with it, so a human game reads from about
-2150 Ma at the root down to 6 Ma at the last branch.
+The cladogram is the board. It grows left to right from the root as a
+conventional rectangular tree, with every species ending as a leaf on the same
+right-hand boundary and the open stage's cards in a separate row below the
+board. Completed stages collapse into narrow history bands while the current
+stage receives most of the available space and readable species labels. Solid
+branches are resolved structure and a dashed branch is the concealed
+continuation; a filled tip is a relationship you inferred and a hollow one was
+revealed to you. Same-tier relatives branch from a single node as a rake, so
+the display never implies an order the topology does not support. Branching
+points show the scientific clade name when OneZoom supplies one and the
+divergence age when known; internal tier indexes are not player-facing.
 
 Cards currently render without images. The historical snapshot's stored
 `media.eol.org` URLs now answer with a Cloudflare bot interstitial rather than

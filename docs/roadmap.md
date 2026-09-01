@@ -98,9 +98,10 @@ interstitial, so cards render without images.
 The cladogram is now the interface: it grows left to right from the root toward
 the target with the open stage's cards in a row beneath it, and encodes
 resolved/unresolved, inferred/revealed, and polytomy structure on independent
-visual channels. Game schema version 2 added `age_ma` to every tier so a
-serialized game carries its own divergence ages; the generator version moved to
-2 with it, so version 1 games are refused on load and must be regenerated.
+visual channels. Completed stages compact into history bands while the current
+stage receives most of the viewport. Game schema version 3 carries both
+`age_ma` and optional `clade_name` on every tier; the generator version moved
+to 3 with it, so earlier games are refused on load and must be regenerated.
 
 The next implementation sequence is:
 
@@ -254,12 +255,15 @@ Status: complete.
 - ~~Render polytomies without false ordering.~~ Same-tier relatives branch from
   a single trunk node as a rake, so no order is implied among them.
 - ~~Preserve readable history while zooming toward later stages.~~ The tree
-  grows left to right and scrolls; `Follow` holds the active end, `Fit all`
-  frames the whole game, and below roughly half scale the labels drop away to
-  leave a structural overview.
+  grows left to right within the board viewport. Completed stages compact into
+  narrow, tooltip-labelled history bands while the current stage receives the
+  remaining space and readable leaf labels.
 - ~~Add optional divergence-age labels.~~ Game schema version 2 carries
   `age_ma` on every tier, so a serialized game is self-contained. Ages are
   sparse (about 46% of tiers) and the label is omitted where none exists.
+- ~~Replace internal tier indexes with optional clade names.~~ Game schema
+  version 3 carries the normalized node scientific name as `clade_name`; the
+  renderer omits it when OneZoom has no name for that branching point.
 
 Deliverable: a continuous cladogram that functions as board, feedback, and
 history.

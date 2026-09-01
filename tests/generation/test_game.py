@@ -75,6 +75,7 @@ def _write_game_sources(normalized_dir: Path) -> None:
         );
         CREATE TABLE nodes (
             node_id INTEGER PRIMARY KEY,
+            scientific_name TEXT,
             age_ma REAL
         );
         CREATE TABLE vernacular_names (
@@ -116,9 +117,15 @@ def _write_game_sources(normalized_dir: Path) -> None:
     # Ages fall toward the target, and one node has none: most real nodes
     # carry no age at all.
     connection.executemany(
-        "INSERT INTO nodes VALUES (?, ?)",
+        "INSERT INTO nodes VALUES (?, ?, ?)",
         (
-            (node_id, None if node_id == 3 else float((TIER_COUNT + 1 - node_id) * 100))
+            (
+                node_id,
+                None if node_id == 3 else f"Clade {node_id}",
+                None
+                if node_id == 3
+                else float((TIER_COUNT + 1 - node_id) * 100),
+            )
             for node_id in range(1, TIER_COUNT + 1)
         ),
     )
@@ -900,16 +907,35 @@ def test_carries_divergence_ages_on_every_tier(sources: dict[str, Path]) -> None
     assert any(tier.age_ma is None for tier in tiers)
 
 
-def test_round_trips_divergence_ages(sources: dict[str, Path]) -> None:
+def test_carries_optional_clade_names_on_every_tier(
+    sources: dict[str, Path],
+) -> None:
+    game = generate_game(target_id=TARGET_ID, seed=11, config=_config(), **sources)
+
+    tiers = [tier for stage in game.stages for tier in stage.tiers]
+    for tier in tiers:
+        expected = (
+            None
+            if tier.ancestor_node_id == 3
+            else f"Clade {tier.ancestor_node_id}"
+        )
+        assert tier.clade_name == expected
+
+
+def test_round_trips_tier_display_metadata(sources: dict[str, Path]) -> None:
     game = generate_game(target_id=TARGET_ID, seed=11, config=_config(), **sources)
 
     payload = _serialized(game)
     assert "age_ma" in payload["stages"][0]["tiers"][0]
+    assert "clade_name" in payload["stages"][0]["tiers"][0]
     restored = game_from_dict(payload)
 
     assert restored == game
     assert [t.age_ma for s in restored.stages for t in s.tiers] == [
         t.age_ma for s in game.stages for t in s.tiers
+    ]
+    assert [t.clade_name for s in restored.stages for t in s.tiers] == [
+        t.clade_name for s in game.stages for t in s.tiers
     ]
 
 
@@ -951,9 +977,23 @@ def test_round_trips_divergence_ages(sources: dict[str, Path]) -> None:
             "invalid serialized game",
             id="missing-age-field",
         ),
+        pytest.param(
+            lambda payload: payload["stages"][0]["tiers"][0].update(
+                clade_name="  "
+            ),
+            "clade name is blank or unnormalized",
+            id="blank-clade-name",
+        ),
+        pytest.param(
+            lambda payload: payload["stages"][0]["tiers"][0].pop(
+                "clade_name"
+            ),
+            "invalid serialized game",
+            id="missing-clade-name-field",
+        ),
     ],
 )
-def test_rejects_invalid_divergence_ages(
+def test_rejects_invalid_tier_display_metadata(
     sources: dict[str, Path], tamper, message: str
 ) -> None:
     game = generate_game(target_id=TARGET_ID, seed=11, config=_config(), **sources)
@@ -970,10 +1010,10 @@ def test_reports_the_new_schema_and_generator_versions(
 ) -> None:
     game = generate_game(target_id=TARGET_ID, seed=11, config=_config(), **sources)
 
-    assert game.schema_version == GAME_SCHEMA_VERSION == 2
-    assert game.generator_version == GAME_GENERATOR_VERSION == 2
+    assert game.schema_version == GAME_SCHEMA_VERSION == 3
+    assert game.generator_version == GAME_GENERATOR_VERSION == 3
     # A game serialized by the previous generator must be refused, not guessed at.
     stale = _serialized(game)
-    stale["schema_version"] = 1
+    stale["schema_version"] = 2
     with pytest.raises(GameGenerationError, match="unsupported schema version"):
         game_from_dict(stale)

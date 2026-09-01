@@ -299,6 +299,40 @@ class CardMetadataStore:
             raise CardMetadataError(f"unknown ancestor node IDs: {missing[:5]!r}")
         return ages
 
+    def clade_names(self, node_ids: Sequence[int]) -> dict[int, str | None]:
+        """Resolve each internal node's optional scientific clade name."""
+        ordered_ids = sorted({int(node_id) for node_id in node_ids})
+        if not ordered_ids:
+            return {}
+        names: dict[int, str | None] = {}
+        try:
+            for offset in range(0, len(ordered_ids), QUERY_BATCH_SIZE):
+                batch = ordered_ids[offset : offset + QUERY_BATCH_SIZE]
+                placeholders = ",".join("?" for _ in batch)
+                names.update(
+                    {
+                        int(node_id): (
+                            None
+                            if scientific_name is None
+                            or not str(scientific_name).strip()
+                            else str(scientific_name).strip()
+                        )
+                        for node_id, scientific_name in self._connection.execute(
+                            "SELECT node_id, scientific_name "
+                            f"FROM nodes WHERE node_id IN ({placeholders})",
+                            batch,
+                        )
+                    }
+                )
+        except sqlite3.Error as error:
+            raise CardMetadataError(
+                f"cannot read normalized clade names: {error}"
+            ) from error
+        missing = sorted(set(ordered_ids) - names.keys())
+        if missing:
+            raise CardMetadataError(f"unknown ancestor node IDs: {missing[:5]!r}")
+        return names
+
     def resolve(self, species_ids: Sequence[int]) -> dict[int, SpeciesCard]:
         """Resolve one complete rich card for every unique requested species."""
         ordered_ids = tuple(int(species_id) for species_id in species_ids)
