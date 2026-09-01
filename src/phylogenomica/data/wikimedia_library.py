@@ -14,7 +14,7 @@ import json
 import shlex
 import ssl
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC
 from pathlib import Path
@@ -371,6 +371,7 @@ def update_wikimedia_library(
     ca_file: Path | None = None,
     max_bytes: int = DEFAULT_MAX_BYTES,
     limit: int | None = None,
+    species_ids: Collection[int] | None = None,
     fetch_binary: BinaryFetcher = _fetch_binary,
     clock: Clock = _now,
     reproduction_command: str | None = None,
@@ -380,6 +381,14 @@ def update_wikimedia_library(
         raise WikimediaLibraryError("max_bytes must be positive")
     if limit is not None and limit <= 0:
         raise WikimediaLibraryError("limit must be positive")
+    requested_species_ids: set[int] | None = None
+    if species_ids is not None:
+        requested_species_ids = set(species_ids)
+        if not requested_species_ids or any(
+            not isinstance(species_id, int) or species_id <= 0
+            for species_id in requested_species_ids
+        ):
+            raise WikimediaLibraryError("species selection is invalid")
     source = _read_json_object(source_manifest_path, "source manifest")
     kind = _source_kind(source)
     dataset_version = source.get("dataset_version")
@@ -403,6 +412,12 @@ def update_wikimedia_library(
         ]
     else:
         selected = [record for record in raw_records if isinstance(record, Mapping)]
+    if requested_species_ids is not None:
+        selected = [
+            record
+            for record in selected
+            if record.get("species_id") in requested_species_ids
+        ]
     selected.sort(key=lambda record: int(record.get("species_id", 0)))
     if limit is not None:
         selected = selected[:limit]

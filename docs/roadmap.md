@@ -316,6 +316,11 @@ resolver:
    missing or changed recognized-rights records, and merges atomically. The
    prototype serves local images and attribution without runtime network
    access. The pilot seeded 43 records, and a repeat import reused all 43.
+9. ~~Add opt-in background acquisition for newly generated games.~~ The
+   prototype resolves only library-missing species, prioritizes opening-stage
+   downloads, atomically refreshes local media, polls stage-scoped progress,
+   and keeps gameplay operational on network or rights failures. Subset
+   resolver manifests cannot overwrite full-game audit manifests.
 
 Missing Wikidata IDs, missing `P18`, missing Commons pages, unsupported media,
 and incomplete attribution must remain distinct unresolved outcomes. The

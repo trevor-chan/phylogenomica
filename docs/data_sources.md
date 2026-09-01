@@ -112,6 +112,15 @@ SHA-256, signature, media type, and dimensions. The current pilot library has
 43 records; rerunning the import reused all 43 and transferred no bytes.
 Libraries remain ignored working data and are not redistribution approval.
 
+The prototype can invoke the same pipeline with
+`--download-missing-images`. This is an explicit network opt-in: it resolves
+only game species absent from the loaded library, writes subset manifests with
+distinct names so it cannot overwrite a full-game audit, and uses one
+background worker to serialize library updates. Current-stage files are
+published before later-stage files. The browser receives progress counts, not
+future-stage species identities. Runtime guesses never depend on enrichment
+success.
+
 Rights policy version 1 classifies media separately from visual review. The
 current noncommercial intent does not waive license requirements. Every
 recognized record is permitted in ignored local working assets, while promotion

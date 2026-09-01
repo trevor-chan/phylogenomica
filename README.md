@@ -268,22 +268,44 @@ has been placed. The concealed target never crosses the wire early.
 The cladogram is the board. It grows left to right from the root as a
 conventional rectangular tree, with every species ending as a leaf on the same
 right-hand boundary and the open stage's cards in a separate row below the
-board. Completed stages collapse into narrow history bands while the current
-stage receives most of the available space and readable species labels. Solid
-branches are resolved structure and a dashed branch is the concealed
-continuation; a filled tip is a relationship you inferred and a hollow one was
-revealed to you. Same-tier relatives branch from a single node as a rake, so
-the display never implies an order the topology does not support. Branching
-points show the scientific clade name when OneZoom supplies one and the
-divergence age when known; internal tier indexes are not player-facing.
+board. The complete current-stage geometry appears immediately as anonymous
+slots; species populate stable slots without resizing the tree. Card-to-slot
+mapping, roles, clade names, and ages remain hidden until placement. Cards also
+remain in their original tray positions and size for the whole stage, becoming
+disabled rather than disappearing after placement. Completed stages collapse
+into moderately compact history bands while the current stage receives most of
+the available space and readable species labels. Solid branches are resolved
+structure and a dashed branch is the concealed continuation; a filled tip is a
+relationship you inferred and a hollow one was revealed to you. Same-tier
+relatives branch from a single node as a rake, so the display never implies an
+order the topology does not support. Branching points show the scientific clade
+name when OneZoom supplies one and the divergence age when known; internal tier
+indexes are not player-facing.
 
 Cards use validated files from an ignored, dataset-level Wikimedia working
 library when one is present. The prototype auto-detects
 `assets/processed/wikimedia-library/<dataset>/manifest.json`, serves its files
 locally, and shows the normalized rights identifier plus full attribution in
-the card tooltip. It never hotlinks or downloads while a game is running.
-Species absent from the library retain the placeholder glyph. Pass
+the card tooltip. By default it never hotlinks or downloads while a game is
+running. Species absent from the library retain the placeholder glyph. Pass
 `--media-library MANIFEST.json` to select a library explicitly.
+
+To fill missing images while playing, opt into the background downloader:
+
+```bash
+phylogenomica-prototype \
+  --download-missing-images \
+  --media-transport curl
+```
+
+The game opens immediately with cached images and placeholders. A single
+background worker resolves only game species absent from the local library,
+downloads and publishes opening-stage images first, then finishes the remaining
+stages. The header reports current-stage progress and the page replaces visible
+placeholders as validated files arrive. “Play again” queues the new game behind
+any request already in flight. Network or rights failures never block guesses;
+unavailable cards keep their placeholders. Downloads remain disabled unless
+the flag is supplied.
 
 The historical snapshot's stored `media.eol.org` URLs now answer with a
 Cloudflare bot interstitial rather than image bytes. See

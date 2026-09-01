@@ -22,6 +22,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from phylogenomica.data.onezoom_ingest import DATABASE_FILENAME
+from phylogenomica.data.wikimedia import DEFAULT_CACHE_ROOT
 from phylogenomica.data.wikimedia_library import (
     DEFAULT_LIBRARY_ROOT,
     WikimediaLibrary,
@@ -55,6 +56,7 @@ from phylogenomica.generation.game import (
     load_game,
 )
 from phylogenomica.generation.selection import RelativeSelectionError
+from phylogenomica.prototype.media import BackgroundMediaDownloader
 from phylogenomica.tree.preprocess import (
     DEFAULT_NORMALIZED_DIR,
     TREE_DATABASE_FILENAME,
@@ -135,55 +137,74 @@ def _card(
 
 
 def _lineage(game: GeneratedGame, state: GameState) -> list[dict[str, object]]:
-    """Group placed species into the growing cladogram, root to target."""
+    """Render placed species into fixed anonymous slots, root to target."""
     members = _members_by_id(game)
-    ages = {
-        tier.ancestor_node_id: tier.age_ma
-        for stage in game.stages
-        for tier in stage.tiers
-    }
-    clade_names = {
-        tier.ancestor_node_id: tier.clade_name
-        for stage in game.stages
-        for tier in stage.tiers
-    }
-    age_by_tier: dict[int, float | None] = {}
-    clade_name_by_tier: dict[int, str | None] = {}
-    stages: dict[int, dict[int | None, list[dict[str, object]]]] = {}
+    placements: dict[tuple[int, int | None], list[PlacedSpecies]] = {}
     for placed in state.placements:
-        if placed.tier_index is not None:
-            age_by_tier[placed.tier_index] = ages.get(placed.ancestor_node_id)
-            clade_name_by_tier[placed.tier_index] = clade_names.get(
-                placed.ancestor_node_id
+        placements.setdefault((placed.stage_index, placed.tier_index), []).append(
+            placed
+        )
+
+    final_visible_stage = (
+        len(game.stages) - 1 if state.completed else state.current_stage_index
+    )
+    lineage: list[dict[str, object]] = []
+    for stage in game.stages[: final_visible_stage + 1]:
+        rendered_tiers: list[dict[str, object]] = []
+        for tier in stage.tiers:
+            placed_at_tier = placements.get(
+                (stage.stage_index, tier.tier_index), []
             )
-        tiers = stages.setdefault(placed.stage_index, {})
-        tiers.setdefault(placed.tier_index, []).append(
+            placed_by_id = {placed.species_id: placed for placed in placed_at_tier}
+            rendered_species: list[dict[str, object]] = []
+            for slot_index, species_id in enumerate(tier.species_ids):
+                placed = placed_by_id.get(species_id)
+                if placed is None:
+                    continue
+                card = members[species_id].card
+                rendered_species.append(
+                    {
+                        "species_id": species_id,
+                        "english_name": card.english_name,
+                        "scientific_name": card.scientific_name,
+                        "role": placed.role,
+                        "placement": placed.placement,
+                        "slot_index": slot_index,
+                    }
+                )
+            # Geometry is safe to reveal, but labels remain hidden until a
+            # species has actually populated the corresponding branching event.
+            populated = bool(rendered_species)
+            rendered_tiers.append(
+                {
+                    "tier_index": tier.tier_index,
+                    "slot_count": len(tier.species_ids),
+                    "age_ma": tier.age_ma if populated else None,
+                    "clade_name": tier.clade_name if populated else None,
+                    "species": rendered_species,
+                }
+            )
+
+        rendered_target: list[dict[str, object]] = []
+        for placed in placements.get((stage.stage_index, None), []):
+            card = members[placed.species_id].card
+            rendered_target.append(
+                {
+                    "species_id": placed.species_id,
+                    "english_name": card.english_name,
+                    "scientific_name": card.scientific_name,
+                    "role": placed.role,
+                    "placement": placed.placement,
+                }
+            )
+        lineage.append(
             {
-                "species_id": placed.species_id,
-                "english_name": members[placed.species_id].card.english_name,
-                "scientific_name": members[placed.species_id].card.scientific_name,
-                "role": placed.role,
-                "placement": placed.placement,
+                "stage_index": stage.stage_index,
+                "tiers": rendered_tiers,
+                "target": rendered_target,
             }
         )
-    return [
-        {
-            "stage_index": stage_index,
-            "tiers": [
-                {
-                    "tier_index": tier_index,
-                    "age_ma": age_by_tier.get(tier_index),
-                    "clade_name": clade_name_by_tier.get(tier_index),
-                    "species": tiers[tier_index],
-                }
-                for tier_index in sorted(
-                    (t for t in tiers if t is not None),
-                )
-            ],
-            "target": tiers.get(None, []),
-        }
-        for stage_index, tiers in sorted(stages.items())
-    ]
+    return lineage
 
 
 def build_view(
@@ -250,7 +271,27 @@ class _Handler(BaseHTTPRequestHandler):
 
     @property
     def _media_library(self) -> WikimediaLibrary | None:
+        downloader = self._media_downloader
+        if downloader is not None:
+            return downloader.library
         return self.server.media_library  # type: ignore[attr-defined]
+
+    @property
+    def _media_downloader(self) -> BackgroundMediaDownloader | None:
+        return self.server.media_downloader  # type: ignore[attr-defined]
+
+    def _view(self) -> dict[str, object]:
+        view = build_view(
+            self._session.game,
+            self._session.state,
+            self._media_library,
+        )
+        if self._media_downloader is not None:
+            view["media_download"] = self._media_downloader.player_status(
+                self._session.game,
+                self._session.state.current_stage_index,
+            )
+        return view
 
     def log_message(self, *_: object) -> None:  # pragma: no cover - quiet server
         pass
@@ -277,14 +318,7 @@ class _Handler(BaseHTTPRequestHandler):
                 200, PAGE_PATH.read_bytes(), "text/html; charset=utf-8"
             )
         elif path == "/api/view":
-            self._send_json(
-                200,
-                build_view(
-                    self._session.game,
-                    self._session.state,
-                    self._media_library,
-                ),
-            )
+            self._send_json(200, self._view())
         elif path.startswith("/media/"):
             try:
                 species_id = int(path.removeprefix("/media/"))
@@ -315,15 +349,11 @@ class _Handler(BaseHTTPRequestHandler):
             ) as error:
                 self._send_json(409, {"error": str(error)})
                 return
+            if self._media_downloader is not None:
+                self._media_downloader.request(self._session.game)
             self._send_json(
                 200,
-                {
-                    "view": build_view(
-                        self._session.game,
-                        self._session.state,
-                        self._media_library,
-                    )
-                },
+                {"view": self._view()},
             )
             return
         if self.path != "/api/guess":
@@ -349,13 +379,20 @@ class _Handler(BaseHTTPRequestHandler):
             200,
             {
                 "outcome": _outcome_payload(outcome),
-                "view": build_view(
-                    self._session.game,
-                    self._session.state,
-                    self._media_library,
-                ),
+                "view": self._view(),
             },
         )
+
+
+class _PrototypeHTTPServer(ThreadingHTTPServer):
+    """Prototype server that also owns its optional background worker."""
+
+    media_downloader: BackgroundMediaDownloader | None = None
+
+    def server_close(self) -> None:
+        if self.media_downloader is not None:
+            self.media_downloader.close()
+        super().server_close()
 
 
 def serve(
@@ -363,15 +400,19 @@ def serve(
     *,
     next_game: Callable[[GeneratedGame], GeneratedGame],
     media_library: WikimediaLibrary | None = None,
+    media_downloader: BackgroundMediaDownloader | None = None,
     host: str = "127.0.0.1",
     port: int = 8000,
 ) -> ThreadingHTTPServer:
     """Return a bound server for a sequence of games, ready to serve."""
-    httpd = ThreadingHTTPServer((host, port), _Handler)
+    httpd = _PrototypeHTTPServer((host, port), _Handler)
     httpd.session = PrototypeSession.start(  # type: ignore[attr-defined]
         game, next_game
     )
     httpd.media_library = media_library  # type: ignore[attr-defined]
+    httpd.media_downloader = media_downloader
+    if media_downloader is not None:
+        media_downloader.request(game)
     return httpd
 
 
@@ -398,6 +439,28 @@ def build_parser() -> argparse.ArgumentParser:
             "dataset under assets/processed/wikimedia-library)"
         ),
     )
+    parser.add_argument(
+        "--download-missing-images",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "resolve and download missing game images in the background "
+            "(default: disabled)"
+        ),
+    )
+    parser.add_argument(
+        "--media-cache-root",
+        type=Path,
+        default=DEFAULT_CACHE_ROOT,
+        help="ignored Wikimedia metadata cache used by background downloads",
+    )
+    parser.add_argument(
+        "--media-transport",
+        choices=("urllib", "curl"),
+        default="urllib",
+        help="verified HTTPS transport for background metadata and images",
+    )
+    parser.add_argument("--media-ca-file", type=Path)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument(
@@ -506,10 +569,27 @@ def main(argv: Sequence[str] | None = None) -> None:
     except WikimediaLibraryError as error:
         raise SystemExit(str(error)) from error
 
+    media_downloader = None
+    if args.download_missing_images:
+        library_root = (
+            args.media_library.parent.parent
+            if args.media_library is not None
+            else DEFAULT_LIBRARY_ROOT
+        )
+        media_downloader = BackgroundMediaDownloader(
+            normalized_database=args.normalized_dir / DATABASE_FILENAME,
+            initial_library=media_library,
+            cache_root=args.media_cache_root,
+            library_root=library_root,
+            ca_file=args.media_ca_file,
+            transport=args.media_transport,
+        )
+
     httpd = serve(
         game,
         next_game=_next_game_factory(args),
         media_library=media_library,
+        media_downloader=media_downloader,
         host=args.host,
         port=args.port,
     )

@@ -17,7 +17,7 @@ import ssl
 import subprocess
 import tempfile
 from collections import Counter
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from html.parser import HTMLParser
@@ -297,7 +297,9 @@ def _game_species_ids(game: GeneratedGame) -> tuple[int, ...]:
 
 
 def _load_species_sources(
-    game: GeneratedGame, normalized_database: Path
+    game: GeneratedGame,
+    normalized_database: Path,
+    species_ids: Collection[int] | None = None,
 ) -> tuple[SpeciesSource, ...]:
     if not normalized_database.is_file():
         raise WikimediaResolutionError(
@@ -321,7 +323,26 @@ def _load_species_sources(
                 "game and normalized database dataset versions differ"
             )
         rows: dict[int, SpeciesSource] = {}
-        ids = _game_species_ids(game)
+        game_ids = _game_species_ids(game)
+        if species_ids is None:
+            ids = game_ids
+        else:
+            requested_ids = tuple(species_ids)
+            if not requested_ids:
+                raise WikimediaResolutionError("species selection is empty")
+            if any(
+                not isinstance(species_id, int) or species_id <= 0
+                for species_id in requested_ids
+            ):
+                raise WikimediaResolutionError(
+                    "species selection contains an invalid species ID"
+                )
+            ids = tuple(sorted(set(requested_ids)))
+            invalid = sorted(set(ids) - set(game_ids))
+            if invalid:
+                raise WikimediaResolutionError(
+                    f"species selection is not part of the game: {invalid[:5]!r}"
+                )
         for offset in range(0, len(ids), 900):
             batch = ids[offset : offset + 900]
             placeholders = ",".join("?" for _ in batch)
@@ -526,12 +547,13 @@ def resolve_game_wikimedia(
     cache_root: Path = DEFAULT_CACHE_ROOT,
     ca_file: Path | None = None,
     refresh: bool = False,
+    species_ids: Collection[int] | None = None,
     fetch_json: JsonFetcher = _fetch_json,
     clock: Clock = _now,
     reproduction_command: str | None = None,
 ) -> tuple[Path, dict[str, Any]]:
     """Resolve one game's species and write a resumable metadata audit."""
-    species = _load_species_sources(game, normalized_database)
+    species = _load_species_sources(game, normalized_database, species_ids)
     cache_dir = cache_root / game.dataset_version / game.game_id
     context = build_ssl_context(ca_file)
     raw_requests: list[dict[str, object]] = []
@@ -668,6 +690,7 @@ def resolve_game_wikimedia(
         "game_id": game.game_id,
         "game_sha256": _game_digest(game),
         "species_count": len(species),
+        "game_species_count": len(_game_species_ids(game)),
         "source": {
             "normalized_database": str(normalized_database),
             "normalized_database_sha256": sha256_file(normalized_database),
@@ -679,6 +702,7 @@ def resolve_game_wikimedia(
             "commons_batch_size": COMMONS_BATCH_SIZE,
             "thumbnail_width": THUMBNAIL_WIDTH,
             "refresh": refresh,
+            "species_scope": "game" if species_ids is None else "subset",
         },
         "status_definitions": STATUS_DEFINITIONS,
         "status_counts": dict(sorted(counts.items())),
@@ -687,7 +711,14 @@ def resolve_game_wikimedia(
         "review_status": "required-before-download-or-promotion",
         "reproduction_command": reproduction_command,
     }
-    manifest_path = cache_dir / "manifest.json"
+    if species_ids is None:
+        manifest_name = "manifest.json"
+    else:
+        scope_digest = hashlib.sha256(
+            ",".join(str(source.species_id) for source in species).encode("ascii")
+        ).hexdigest()[:16]
+        manifest_name = f"manifest-subset-{scope_digest}.json"
+    manifest_path = cache_dir / manifest_name
     _atomic_json(manifest_path, manifest)
     return manifest_path, manifest
 

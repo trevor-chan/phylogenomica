@@ -8,7 +8,11 @@ from dataclasses import replace
 import pytest
 
 from phylogenomica.data.cards import CardImage, MetadataSource, SpeciesCard
-from phylogenomica.data.wikimedia_library import load_wikimedia_library
+from phylogenomica.data.wikimedia_library import (
+    WikimediaAsset,
+    WikimediaLibrary,
+    load_wikimedia_library,
+)
 from phylogenomica.data.wikimedia_rights import classify_rights
 from phylogenomica.gameplay.engine import initial_state, replay
 from phylogenomica.generation.feasibility import FeasibilityConfig
@@ -20,6 +24,7 @@ from phylogenomica.generation.game import (
     GeneratedGame,
     GeneratedStage,
 )
+from phylogenomica.prototype.media import BackgroundMediaDownloader
 from phylogenomica.prototype.server import (
     PAGE_PATH,
     PrototypeSession,
@@ -154,6 +159,29 @@ def test_serves_only_the_open_stage_and_hides_the_target() -> None:
     assert {"game_id", "dataset_version", "seed", "target_id"}.isdisjoint(view)
 
 
+def test_reserves_anonymous_stage_slots_before_any_species_is_placed() -> None:
+    game = _game()
+
+    opening = build_view(game, initial_state(game))
+
+    assert [stage["stage_index"] for stage in opening["lineage"]] == [0]
+    tiers = opening["lineage"][0]["tiers"]
+    assert len(tiers) == 3
+    assert [tier["slot_count"] for tier in tiers] == [1, 1, 1]
+    assert all(tier["species"] == [] for tier in tiers)
+    # Clade and age can identify a card through outside knowledge, so only the
+    # anonymous geometry crosses the wire until its first species is placed.
+    assert all(tier["age_ma"] is None for tier in tiers)
+    assert all(tier["clade_name"] is None for tier in tiers)
+
+    state, _ = replay(game, [DECOY_A])
+    populated = build_view(game, state)["lineage"][0]["tiers"]
+    assert len(populated) == len(tiers)
+    assert populated[0]["species"][0]["species_id"] == DECOY_A
+    assert populated[0]["species"][0]["slot_index"] == 0
+    assert populated[1]["species"] == populated[2]["species"] == []
+
+
 def test_withholds_tier_and_role_until_a_card_is_placed() -> None:
     game = _game()
 
@@ -240,6 +268,70 @@ def test_session_guesses_and_plays_another_seed() -> None:
     assert session.state.placements == ()
 
 
+def test_background_media_download_prioritizes_the_opening_stage(
+    tmp_path,
+) -> None:
+    game = _game()
+    resolved_ids = {
+        member.species_id for stage in game.stages for member in stage.members
+    }
+    resolver_calls = []
+    update_calls = []
+    assets = {}
+
+    def resolver(requested_game, **options):
+        resolver_calls.append((requested_game, options))
+        return tmp_path / "resolver.json", {
+            "records": [
+                {"species_id": species_id, "status": "resolved"}
+                for species_id in sorted(resolved_ids)
+            ]
+        }
+
+    def updater(_manifest, **options):
+        selected = set(options["species_ids"])
+        update_calls.append(selected)
+        for species_id in selected:
+            assets[species_id] = WikimediaAsset(
+                species_id=species_id,
+                path=tmp_path / f"{species_id}.png",
+                mime_type="image/png",
+                sha256="a" * 64,
+                attribution_text="Example attribution",
+                license_name="CC-BY-4.0",
+                rights_url="https://creativecommons.org/licenses/by/4.0/",
+                commons_page_url=f"https://commons.example/{species_id}",
+            )
+        return tmp_path / "library" / "manifest.json", {}
+
+    def loader(manifest_path, **_options):
+        return WikimediaLibrary(manifest_path, game.dataset_version, dict(assets))
+
+    downloader = BackgroundMediaDownloader(
+        normalized_database=tmp_path / "onezoom.sqlite3",
+        cache_root=tmp_path / "cache",
+        library_root=tmp_path / "library",
+        resolver=resolver,
+        updater=updater,
+        library_loader=loader,
+    )
+    try:
+        downloader.request(game)
+        assert downloader.wait(game.game_id) == "ready"
+
+        assert len(resolver_calls) == 1
+        assert set(resolver_calls[0][1]["species_ids"]) == resolved_ids
+        assert update_calls == [
+            {DECOY_A, MULLIGAN_A, UNLOCK},
+            {DECOY_B, MULLIGAN_B, TARGET},
+        ]
+        status = downloader.player_status(game, 0)
+        assert status["available_count"] == status["total_count"] == 3
+        assert status["revision"] == 2
+    finally:
+        downloader.close()
+
+
 @pytest.fixture
 def media_library(tmp_path):
     root = tmp_path / "library"
@@ -321,8 +413,18 @@ def test_serves_the_page_and_the_view(server: str) -> None:
     assert b"Solway" in page
     assert page == PAGE_PATH.read_bytes()
     # The tree is the board, so its container and controls must be present.
-    for marker in (b'id="stage-tree"', b'id="cards"', b'id="fit"', b'id="follow"'):
+    for marker in (
+        b'id="stage-tree"',
+        b'id="cards"',
+        b'id="fit"',
+        b'id="follow"',
+        b'id="media-status"',
+    ):
         assert marker in page
+    # The column adapter must preserve anonymous slots for vertical layout.
+    assert b"slotCount: Number.isInteger(tier.slot_count)" in page
+    assert b"length: tier.slotCount" in page
+    assert b"setTimeout(refreshMedia, 1000)" in page
 
     status, body = _get(server, "/api/view")
     assert status == 200
@@ -334,6 +436,55 @@ def test_serves_the_page_and_the_view(server: str) -> None:
     status, image = _get(server, f"/media/{DECOY_A}")
     assert status == 200
     assert image == PNG_1_BY_1
+
+
+def test_server_reports_download_progress_and_queues_play_again(
+    media_library,
+) -> None:
+    class FakeDownloader:
+        def __init__(self):
+            self.library = media_library
+            self.requests = []
+            self.closed = False
+
+        def request(self, game):
+            self.requests.append(game.game_id)
+
+        def player_status(self, _game, _stage_index):
+            return {
+                "enabled": True,
+                "state": "ready",
+                "available_count": 3,
+                "total_count": 3,
+                "revision": 1,
+                "failed": False,
+            }
+
+        def close(self):
+            self.closed = True
+
+    downloader = FakeDownloader()
+    httpd = serve(
+        _game(),
+        next_game=_next_game,
+        media_downloader=downloader,  # type: ignore[arg-type]
+        port=0,
+    )
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{httpd.server_address[1]}"
+    try:
+        _, body = _get(base, "/api/view")
+        assert json.loads(body)["media_download"]["state"] == "ready"
+
+        _, payload = _post(base, "/api/play-again")
+        assert payload["view"]["media_download"]["available_count"] == 3
+        assert downloader.requests == ["a" * 64, "b" * 64]
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+    assert downloader.closed is True
 
 
 def test_resolves_guesses_over_http(server: str) -> None:
@@ -381,6 +532,11 @@ def test_command_line_allows_a_random_target_or_one_explicit_source() -> None:
     assert parser.parse_args(["--target", "5"]).target == 5
     random_args = parser.parse_args([])
     assert random_args.target is None and random_args.game is None
+    download_args = parser.parse_args(
+        ["--download-missing-images", "--media-transport", "curl"]
+    )
+    assert download_args.download_missing_images is True
+    assert download_args.media_transport == "curl"
     with pytest.raises(SystemExit):
         parser.parse_args(["--target", "5", "--game", "game.json"])
 

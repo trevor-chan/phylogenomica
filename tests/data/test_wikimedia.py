@@ -318,7 +318,7 @@ def test_reuses_raw_request_cache_without_network(tmp_path: Path) -> None:
     def no_network(*_args):
         raise AssertionError("cached rerun attempted a network request")
 
-    _, manifest = resolve_game_wikimedia(
+    manifest_path, manifest = resolve_game_wikimedia(
         _game(),
         normalized_database=database,
         cache_root=cache_root,
@@ -328,6 +328,47 @@ def test_reuses_raw_request_cache_without_network(tmp_path: Path) -> None:
 
     assert all(request["cache_hit"] for request in manifest["raw_requests"])
     assert manifest["status_counts"]["resolved"] == 1
+
+
+def test_resolves_only_a_requested_subset_of_game_species(tmp_path: Path) -> None:
+    database = tmp_path / "onezoom.sqlite3"
+    _write_database(database)
+
+    def fetch_subset(endpoint, parameters, _context):
+        if endpoint == WIKIDATA_API_URL:
+            assert parameters["ids"] == "Q1"
+            return {
+                "entities": {
+                    "Q1": {
+                        "claims": {"P18": [_p18("Resolved.jpg")]},
+                    }
+                }
+            }
+        assert endpoint == COMMONS_API_URL
+        assert parameters["titles"] == "File:Resolved.jpg"
+        return {
+            "query": {
+                "pages": [_image_page("Resolved.jpg", artist="Jane Doe")]
+            }
+        }
+
+    manifest_path, manifest = resolve_game_wikimedia(
+        _game(),
+        normalized_database=database,
+        cache_root=tmp_path / "cache",
+        species_ids={1, 3},
+        fetch_json=fetch_subset,
+    )
+
+    assert manifest["species_count"] == 2
+    assert manifest_path.name.startswith("manifest-subset-")
+    assert manifest["game_species_count"] == 6
+    assert manifest["configuration"]["species_scope"] == "subset"
+    assert [record["species_id"] for record in manifest["records"]] == [1, 3]
+    assert manifest["status_counts"] == {
+        "missing_wikidata_id": 1,
+        "resolved": 1,
+    }
 
 
 def test_rejects_a_mismatched_normalized_dataset(tmp_path: Path) -> None:

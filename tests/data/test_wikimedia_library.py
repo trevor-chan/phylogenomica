@@ -194,3 +194,26 @@ def test_blocks_unrecognized_rights_before_downloading(tmp_path: Path) -> None:
     assert manifest["record_count"] == 0
     assert manifest["last_update"]["blocked_count"] == 1
     assert manifest["last_update"]["blocked_species_ids"] == [1]
+
+
+def test_can_prioritize_a_species_subset_from_a_resolver_manifest(
+    tmp_path: Path,
+) -> None:
+    resolver = tmp_path / "resolver.json"
+    _write_resolver_manifest(resolver, [_resolver_record(1), _resolver_record(2)])
+    requested: list[str] = []
+
+    def fetch(url, _context, _max_bytes):
+        requested.append(url)
+        return BinaryResponse(PNG_1_BY_1, "image/png", url)
+
+    _, manifest = update_wikimedia_library(
+        resolver,
+        library_root=tmp_path / "library",
+        species_ids={2},
+        fetch_binary=fetch,
+    )
+
+    assert requested == ["https://upload.example/2.png?width=512"]
+    assert manifest["record_count"] == 1
+    assert manifest["records"][0]["species_id"] == 2

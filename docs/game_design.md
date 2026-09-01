@@ -250,6 +250,12 @@ The initial rich-card mode requires all three fields. A future relaxed mode may
 allow a scientific name without a reliable vernacular; scientific names may
 themselves provide fair phylogenetic information.
 
+The local prototype may replace a placeholder with a validated image while a
+game is open when background media download is explicitly enabled. Image
+availability is presentation state only: it does not activate or remove cards,
+change the fixed cladogram geometry, affect scoring, or participate in answer
+selection.
+
 ## Guess and reveal rules
 
 A transition stage begins with all of its cards active. Choosing the unlock
@@ -340,8 +346,11 @@ history. Divergence ages are optional labels and never determine correctness.
 The prototype encodes each distinction with a separate visual channel, so none
 of them has to be inferred from another: stroke style carries resolved versus
 unresolved, tip fill carries inferred versus revealed, and a polytomy is a rake
-from one trunk node rather than a nested sequence. Only placed species are
-drawn, so the board cannot disclose the open stage's answer.
+from one trunk node rather than a nested sequence. At stage opening it draws
+the complete geometry as anonymous empty leaf slots. It sends no unplaced
+species-to-slot mapping, role, clade name, or divergence age. Placements fill
+stable slots without reflow, so the board remains trackable without disclosing
+the open stage's answer.
 
 ## Endgame
 

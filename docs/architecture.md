@@ -100,9 +100,20 @@ candidate-space search possible.
 
 The server may load one validated Wikimedia working library matching the
 game's dataset version. Only cards in the open stage receive local `/media/ID`
-URLs and attribution payloads; the server performs no metadata or image network
-requests. A missing library record produces the ordinary placeholder. The
-media index is presentation metadata and cannot alter correctness.
+URLs and attribution payloads; without explicit download opt-in, the server
+performs no metadata or image network requests. A missing library record
+produces the ordinary placeholder. The media index is presentation metadata and
+cannot alter correctness.
+
+With the explicit `--download-missing-images` option, the prototype owns one
+daemon worker that serializes library writes. It computes the game species
+absent from the current library, resolves only that subset, publishes validated
+opening-stage assets first, and then processes later stages. Requests from
+“Play again” coalesce to the newest pending game while an in-flight network
+operation finishes. The HTTP API reports only state and image counts for the
+open stage; it never sends future species IDs or media readiness. Each library
+reload is an immutable reference swap, so request handlers see either the old
+or new validated index. Worker failure leaves gameplay and placeholders intact.
 
 The prototype accepts an explicit target or serialized game, but defaults to a
 uniform random row from the eligible-target index when neither is supplied.
@@ -119,17 +130,22 @@ succeeds.
 The cladogram is the interface. Its SVG is a rooted rectangular tree growing
 left to right: tiers are nested branching events, while every species is a
 terminal leaf on one right-hand boundary. A tier with several relatives is one
-rake/polytomy rather than a sequence of invented splits. Completed stages use
-narrow horizontal bands and compact, tooltip-labelled leaves; the current
-stage receives the remaining width and height plus readable species labels.
+rake/polytomy rather than a sequence of invented splits. The server exposes the
+current stage's topology as anonymous fixed slots, withholding the identity,
+role, clade label, and age of each unpopulated slot. Placements carry a stable
+within-tier slot index, so existing leaves never move when another card is
+placed. Completed stages use moderately compact horizontal bands and
+tooltip-labelled leaves; the current stage receives the remaining width and
+height plus readable species labels.
 The SVG dimensions follow the board viewport, so normal play remains within a
 single screen rather than growing with the lineage. Optional clade names and
 divergence ages label current-stage internal nodes but never affect layout or
 correctness. Cards for the open stage occupy a separate row beneath the board.
 Stroke style separates resolved from unresolved, tip fill separates inferred
 from revealed, a hollow internal node marks a polytomy, and a dashed terminal
-branch marks the concealed continuation. The tree is built only from placed
-species, so it cannot leak the open stage's answer.
+branch marks the concealed continuation. Open-stage cards stay in fixed tray
+positions and dimensions after placement. Anonymous geometry cannot leak the
+card-to-tier answer, and the frontend never reconstructs correctness.
 
 Developer scripts in `scripts/` call these modules but contain no reusable
 business logic. A future API and frontend should be separate layers rather than

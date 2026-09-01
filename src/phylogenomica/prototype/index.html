@@ -36,6 +36,10 @@
   }
   h1 { font-size: .95rem; margin: 0; letter-spacing: .09em; text-transform: uppercase; }
   h1 span { color: var(--muted); font-weight: 400; letter-spacing: 0; text-transform: none; }
+  .media-status {
+    color: var(--muted); font-size: .72rem; letter-spacing: .02em;
+    white-space: nowrap;
+  }
   .stats { display: flex; gap: 1.4rem; margin-left: auto; }
   .stat { text-align: right; }
   .stat b { display: block; font-size: 1.2rem; font-variant-numeric: tabular-nums; line-height: 1.1; }
@@ -81,25 +85,30 @@
   }
   #feedback.good { border-color: var(--good); }
   #feedback.cost { border-color: var(--warn); }
-  #cards { display: flex; gap: .5rem; overflow-x: auto; padding-bottom: .2rem; }
+  #cards {
+    display: flex; gap: .5rem; align-items: stretch;
+    overflow-x: auto; padding-bottom: .2rem;
+  }
   .card {
-    flex: 1 1 0; min-width: 7rem; display: flex; gap: .5rem; align-items: center;
-    text-align: left; padding: .4rem; border: 1px solid var(--line); border-radius: .45rem;
+    flex: 1 0 8.25rem; min-width: 8.25rem; max-width: 12rem;
+    display: flex; flex-direction: column; gap: .4rem; align-items: stretch;
+    text-align: center; padding: .45rem; border: 1px solid var(--line); border-radius: .45rem;
     background: var(--bg); color: inherit; font: inherit; cursor: pointer;
     transition: border-color .12s, transform .12s;
   }
   .card:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-2px); }
   .card:disabled { cursor: default; opacity: .4; }
   .thumb {
-    flex: 0 0 auto; width: 2.2rem; height: 2.2rem; border-radius: .3rem; overflow: hidden;
+    flex: 0 0 auto; width: 100%; aspect-ratio: 4 / 3;
+    border-radius: .3rem; overflow: hidden;
     background: linear-gradient(160deg, var(--line), var(--panel));
-    display: grid; place-items: center; font-size: 1.1rem; color: var(--muted);
+    display: grid; place-items: center; font-size: 2rem; color: var(--muted);
   }
-  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
   .en { font-weight: 600; font-size: .85rem; line-height: 1.2; }
   .sci { font-style: italic; color: var(--muted); font-size: .74rem; line-height: 1.2; }
   .credit { color: var(--muted); font-size: .62rem; line-height: 1.2; }
-  .meta { min-width: 0; }
+  .meta { min-width: 0; width: 100%; }
   .meta > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .meta .en { white-space: normal; overflow-wrap: anywhere; }
   .again {
@@ -111,6 +120,7 @@
 <body>
 <header>
   <h1>Phylogenomica <span id="stage"></span></h1>
+  <span id="media-status" class="media-status" hidden></span>
   <div class="stats">
     <div class="stat"><b id="score">0</b><small>banked</small></div>
     <div class="stat"><b id="stake">0</b><small>at stake</small></div>
@@ -145,9 +155,9 @@ const $ = (id) => document.getElementById(id);
 const NS = "http://www.w3.org/2000/svg";
 const MIN_TREE_WIDTH = 720, LABEL_WIDTH = 250;
 const BRANCH_LEFT = 72, TREE_TOP = 50, TREE_BOTTOM = 44;
-const HISTORY_STAGE_WIDTH = 76;
+const HISTORY_STAGE_WIDTH = 152;
 let scale = 1, follow = true, busy = false;
-let currentView = null, resizeTimer = null;
+let currentView = null, resizeTimer = null, mediaTimer = null;
 
 function el(name, attrs = {}) {
   const node = document.createElementNS(NS, name);
@@ -183,6 +193,9 @@ function columns(view) {
       cols.push({
         stage: stage.stage_index, tier: tier.tier_index,
         age: tier.age_ma, clade: tier.clade_name, species: tier.species,
+        slotCount: Number.isInteger(tier.slot_count)
+          ? tier.slot_count
+          : tier.species.length,
       });
     }
   }
@@ -212,7 +225,7 @@ function renderTree(view) {
   const branchWidth = branchRight - BRANCH_LEFT;
   const historyStageCount = focusStage;
   const historyWidth = historyStageCount
-    ? Math.min(branchWidth * 0.42, historyStageCount * HISTORY_STAGE_WIDTH)
+    ? Math.min(branchWidth * 0.68, historyStageCount * HISTORY_STAGE_WIDTH)
     : 0;
   const historyStageWidth = historyStageCount
     ? historyWidth / historyStageCount
@@ -222,10 +235,20 @@ function renderTree(view) {
   // Completed stages are narrow historical bands. The current stage receives
   // the rest of the horizontal branching space, regardless of how deep its
   // selected tier indexes happen to be in the generator's internal model.
-  const layout = tiers.map((tier) => ({
-    ...tier,
-    leaves: tier.species.map((species) => ({ species })),
-  }));
+  const layout = tiers.map((tier) => {
+    const speciesBySlot = new Map(
+      tier.species.map((species) => [species.slot_index, species]),
+    );
+    return {
+      ...tier,
+      // Anonymous slots reserve the complete current-stage geometry. A placed
+      // species fills its deterministic slot without moving existing leaves.
+      leaves: Array.from({ length: tier.slotCount }, (_, slotIndex) => ({
+        species: speciesBySlot.get(slotIndex) || null,
+        slotIndex,
+      })),
+    };
+  });
   const stageBands = [];
   let stageStart = BRANCH_LEFT;
   for (let stage = 0; stage <= focusStage; stage++) {
@@ -249,7 +272,7 @@ function renderTree(view) {
     .flatMap((tier) => tier.leaves);
   const endpoint = { y: 0 };
   const historyEnd = historyLeaves.length
-    ? Math.min(TREE_TOP + height * 0.24, height - TREE_BOTTOM - 150)
+    ? Math.min(TREE_TOP + height * 0.36, height - TREE_BOTTOM - 150)
     : TREE_TOP;
   distributeLeaves(historyLeaves, TREE_TOP, historyEnd);
   const focusStart = historyLeaves.length ? historyEnd + 28 : TREE_TOP;
@@ -319,8 +342,16 @@ function renderTree(view) {
 
     tier.leaves.forEach(({ species, y }) => {
       svg.appendChild(el("line", {
-        x1: tier.x, y1: y, x2: leafX, y2: y, class: "edge",
+        x1: tier.x, y1: y, x2: leafX, y2: y,
+        class: species ? "edge" : "edge unresolved",
       }));
+      if (!species) {
+        svg.appendChild(el("circle", {
+          cx: leafX, cy: y, r: tier.stage < focusStage ? 2.5 : 4,
+          class: "tip unknown-tip",
+        }));
+        return;
+      }
       svg.appendChild(el("circle", {
         cx: leafX, cy: y, r: tier.stage < focusStage ? 2.5 : 4,
         class: `tip ${species.placement}${species.role === "target" ? " target" : ""}`,
@@ -482,8 +513,9 @@ function render(view, outcome) {
 
   const cards = $("cards");
   cards.innerHTML = "";
-  // Only cards still in play are shown; placed ones now live on the tree.
-  for (const card of view.cards.filter((c) => c.state === "active")) {
+  // Keep every card in its original tray slot for the entire stage. Placed
+  // cards become disabled but do not disappear or cause their peers to resize.
+  for (const card of view.cards) {
     cards.appendChild(cardNode(card));
   }
   if (view.completed) {
@@ -495,10 +527,58 @@ function render(view, outcome) {
   }
 
   renderTree(view);
+  updateMediaStatus(view);
   if (outcome) describe(outcome, view);
   else if (view.completed) {
     $("feedback").className = "good";
     $("feedback").textContent = `Final score ${view.score} of ${view.maximum}.`;
+  }
+}
+
+function updateMediaStatus(view) {
+  const box = $("media-status");
+  const media = view.media_download;
+  clearTimeout(mediaTimer);
+  mediaTimer = null;
+  if (!media || !media.enabled || media.total_count === 0) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  const count = `images ${media.available_count}/${media.total_count}`;
+  const activity = {
+    queued: "queued",
+    resolving: "finding sources…",
+    downloading: "downloading…",
+    error: "download failed",
+  }[media.state];
+  box.textContent = activity ? `${count} · ${activity}` : count;
+  if (["queued", "resolving", "downloading"].includes(media.state)) {
+    mediaTimer = setTimeout(refreshMedia, 1000);
+  }
+}
+
+async function refreshMedia() {
+  if (busy) {
+    mediaTimer = setTimeout(refreshMedia, 500);
+    return;
+  }
+  try {
+    const res = await fetch("/api/view");
+    if (!res.ok) return;
+    const view = await res.json();
+    const previous = currentView && currentView.media_download;
+    const next = view.media_download;
+    const imagesChanged = !previous || !next ||
+      previous.revision !== next.revision ||
+      previous.available_count !== next.available_count;
+    if (imagesChanged) render(view);
+    else {
+      currentView.media_download = next;
+      updateMediaStatus(currentView);
+    }
+  } catch (_) {
+    mediaTimer = setTimeout(refreshMedia, 1500);
   }
 }
 
