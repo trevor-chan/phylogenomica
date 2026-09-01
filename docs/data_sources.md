@@ -74,13 +74,14 @@ and short post-game descriptions.
 Enrichment follows the working topology; it does not change game correctness.
 It comes after ingestion, preprocessing, generation, and engine validation.
 
-Resolver version 1 implements a metadata-only pilot for one generated game. It
+Resolver version 2 implements a metadata-only pilot for one generated game. It
 batches OneZoom's numeric Wikidata IDs as Q-IDs through `wbgetentities`, prefers
 non-deprecated `P18` statements by Wikidata rank, and queries the selected
 Commons files through `imageinfo`. Raw response envelopes record the canonical
 request URL, retrieval time, and checksum under `data/cache/wikimedia/`.
 Normalized records convert the Commons `extmetadata` HTML to plain text for
-safe later display while preserving the raw response as evidence.
+safe later display while preserving URL query strings and the raw response as
+evidence.
 
 The resolver reports distinct statuses for missing or invalid Wikidata IDs,
 missing entities, absent `P18`, absent Commons pages or image information,
@@ -88,6 +89,37 @@ non-image media, and incomplete creator/license fields. It performs no fuzzy
 name lookup and downloads no media. A result marked `resolved` still requires
 manual review because Commons itself advises reusers to verify each file's
 copyright status and license requirements.
+
+The live human/seed-42 pilot completed on 2026-09-01. It resolved complete
+metadata for 43 of 50 species, found three additional image candidates with
+missing creator/credit, and left four species without a Wikidata `P18` path.
+The initial run exposed a URL-normalization defect caused by Wikimedia's
+ampersand-delimited tracking parameters. Resolver version 2 fixes it, and a
+cache-only rebuild restored all 46 original and thumbnail URLs without new API
+traffic. A three-file live download validated the working-asset pipeline, after
+which all 43 fully attributed candidates were downloaded and machine-validated.
+The maintainer then reviewed the full candidate page favorably. Every file
+remains ignored and unapproved pending an exported per-file review. See the
+[pilot audit](audits/wikimedia_human_seed_42.md).
+
+Library builder version 1 converts these per-game working assets into an
+incremental dataset-level library under
+`assets/processed/wikimedia-library/<dataset>/`. It can import an existing
+download manifest without network access or consume a resolver manifest and
+download only species that are absent or whose normalized Wikimedia source
+fingerprint changed. Every reused file is revalidated against byte count,
+SHA-256, signature, media type, and dimensions. The current pilot library has
+43 records; rerunning the import reused all 43 and transferred no bytes.
+Libraries remain ignored working data and are not redistribution approval.
+
+Rights policy version 1 classifies media separately from visual review. The
+current noncommercial intent does not waive license requirements. Every
+recognized record is permitted in ignored local working assets, while promotion
+uses `ready`, `conditional`, and `blocked` states. Standard CC BY, CC BY-SA, and
+CC0 records can be ready; public-domain short labels, GFDL, copyrighted-free-use,
+and no-known-restrictions records remain conditional until their specific
+evidence or packaging requirements are met. See the
+[media-rights policy](media_rights.md).
 
 ### Divergence times
 
@@ -107,7 +139,7 @@ must preserve:
 - taxon and source identifier;
 - original source URL;
 - creator and required attribution;
-- license name and license URL;
+- normalized rights identifier and canonical license or rights-statement URL;
 - retrieval date;
 - transformation or derivative information.
 

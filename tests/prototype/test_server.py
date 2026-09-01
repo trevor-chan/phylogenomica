@@ -1,3 +1,4 @@
+import hashlib
 import json
 import threading
 import urllib.error
@@ -7,6 +8,8 @@ from dataclasses import replace
 import pytest
 
 from phylogenomica.data.cards import CardImage, MetadataSource, SpeciesCard
+from phylogenomica.data.wikimedia_library import load_wikimedia_library
+from phylogenomica.data.wikimedia_rights import classify_rights
 from phylogenomica.gameplay.engine import initial_state, replay
 from phylogenomica.generation.feasibility import FeasibilityConfig
 from phylogenomica.generation.game import (
@@ -20,6 +23,7 @@ from phylogenomica.generation.game import (
 from phylogenomica.prototype.server import (
     PAGE_PATH,
     PrototypeSession,
+    _load_media_library,
     _load_prototype_game,
     _next_game_factory,
     _startup_summary,
@@ -31,6 +35,12 @@ from phylogenomica.prototype.server import (
 DECOY_A, MULLIGAN_A, UNLOCK = 1, 2, 3
 DECOY_B, MULLIGAN_B, TARGET = 4, 5, 6
 CONFIG = FeasibilityConfig(members_per_stage=3, stages_per_game=2)
+PNG_1_BY_1 = (
+    b"\x89PNG\r\n\x1a\n"
+    b"\x00\x00\x00\rIHDR"
+    b"\x00\x00\x00\x01\x00\x00\x00\x01"
+    b"\x08\x06\x00\x00\x00"
+)
 
 
 def _member(species_id: int, role: str, tier_index: int | None) -> GameMember:
@@ -155,7 +165,10 @@ def test_withholds_tier_and_role_until_a_card_is_placed() -> None:
         assert "tier_index" not in card
         assert "role" not in card
         assert card["english_name"] and card["scientific_name"]
-        assert card["image_url"] and card["rights"] and card["license"]
+        # Historical OneZoom URLs are never hotlinked at runtime.
+        assert card["image_url"] is None
+        assert card["rights"] is None
+        assert card["license"] is None
 
     state, _ = replay(game, [DECOY_A])
     placed = {c["species_id"]: c for c in build_view(game, state)["cards"]}
@@ -228,8 +241,53 @@ def test_session_guesses_and_plays_another_seed() -> None:
 
 
 @pytest.fixture
-def server():
-    httpd = serve(_game(), next_game=_next_game, port=0)
+def media_library(tmp_path):
+    root = tmp_path / "library"
+    files = root / "files"
+    files.mkdir(parents=True)
+    records = []
+    checksum = hashlib.sha256(PNG_1_BY_1).hexdigest()
+    for species_id in range(1, 7):
+        local_path = f"files/{species_id}.png"
+        (root / local_path).write_bytes(PNG_1_BY_1)
+        record = {
+            "species_id": species_id,
+            "commons_title": f"File:{species_id}.png",
+            "commons_page_url": f"https://commons.example/{species_id}",
+            "mime_type": "image/png",
+            "width": 1,
+            "height": 1,
+            "bytes": len(PNG_1_BY_1),
+            "sha256": checksum,
+            "local_path": local_path,
+            "creator": "Example creator",
+            "license_name": "CC BY 4.0",
+            "license_url": "https://creativecommons.org/licenses/by/4.0/",
+            "transformation": "No local transformation.",
+        }
+        record["rights"] = classify_rights(record)
+        records.append(record)
+    manifest = root / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "dataset_version": "test-proto-1",
+                "records": records,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return load_wikimedia_library(
+        manifest, expected_dataset_version="test-proto-1"
+    )
+
+
+@pytest.fixture
+def server(media_library):
+    httpd = serve(
+        _game(), next_game=_next_game, media_library=media_library, port=0
+    )
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
     yield f"http://127.0.0.1:{httpd.server_address[1]}"
@@ -268,7 +326,14 @@ def test_serves_the_page_and_the_view(server: str) -> None:
 
     status, body = _get(server, "/api/view")
     assert status == 200
-    assert json.loads(body)["stage_index"] == 0
+    view = json.loads(body)
+    assert view["stage_index"] == 0
+    assert view["cards"][0]["image_url"] == f"/media/{DECOY_A}"
+    assert view["cards"][0]["image_attribution"]["source_url"]
+
+    status, image = _get(server, f"/media/{DECOY_A}")
+    assert status == 200
+    assert image == PNG_1_BY_1
 
 
 def test_resolves_guesses_over_http(server: str) -> None:
@@ -318,6 +383,17 @@ def test_command_line_allows_a_random_target_or_one_explicit_source() -> None:
     assert random_args.target is None and random_args.game is None
     with pytest.raises(SystemExit):
         parser.parse_args(["--target", "5", "--game", "game.json"])
+
+
+def test_loads_an_explicit_dataset_matching_media_library(media_library) -> None:
+    args = build_parser().parse_args(
+        ["--media-library", str(media_library.manifest_path)]
+    )
+
+    loaded = _load_media_library(args, _game())
+
+    assert loaded is not None
+    assert loaded.asset(DECOY_A) is not None
 
 
 def test_loads_a_uniformly_selected_eligible_target_when_unspecified(

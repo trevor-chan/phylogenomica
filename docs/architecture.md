@@ -35,12 +35,24 @@ Owns dump parsing, schema adapters, metadata normalization, validation,
 manifests, serialization, and quantitative audits. Source-specific field names
 should stop at this boundary.
 
-Phase 10's Wikimedia resolver also lives here because it is an offline,
-rebuildable enrichment step rather than runtime gameplay. It maps the species
-in a validated game to OneZoom Wikidata IDs, resolves ranked `P18` statements
-and Commons `imageinfo` in batches, and stores raw response evidence plus
-normalized review records under ignored cache storage. It does not download or
-promote assets, and the gameplay engine never calls a live metadata service.
+Phase 10's Wikimedia tooling also lives here because it is an offline,
+rebuildable enrichment step rather than runtime gameplay. The resolver maps
+the species in a validated game to OneZoom Wikidata IDs, resolves ranked `P18`
+statements and Commons `imageinfo` in batches, and stores raw response evidence
+plus normalized review records under ignored cache storage. A separate
+downloader accepts only resolved records, verifies response media type, image
+signature, dimensions, byte limits, and checksums, and writes a provenance
+manifest beside ignored working assets. A static local review page rechecks
+those assets against the manifest and a separately pinned rights-policy
+evaluation. It supports explicit accept, conditional, reject, or alternate
+decisions with notes and exports review JSON pinned to both source manifests.
+The incremental library builder then merges either resolver output or an
+existing download manifest into a dataset-level, species-keyed working library.
+It reuses matching validated assets across seeds and targets, downloads only
+missing or source-changed records, rejects blocked rights before retrieval,
+uses content-addressed local filenames, and preserves prior species on each
+merge. None of these components promotes assets, and the gameplay engine never
+calls a live metadata service.
 
 ### `phylogenomica.tree`
 
@@ -85,6 +97,12 @@ player reading network traffic, not merely against one reading the screen.
 Generation identity fields are also withheld while playing because the
 deterministic game identifier digests the target ID and would make a small
 candidate-space search possible.
+
+The server may load one validated Wikimedia working library matching the
+game's dataset version. Only cards in the open stage receive local `/media/ID`
+URLs and attribution payloads; the server performs no metadata or image network
+requests. A missing library record produces the ordinary placeholder. The
+media index is presentation metadata and cannot alter correctness.
 
 The prototype accepts an explicit target or serialized game, but defaults to a
 uniform random row from the eligible-target index when neither is supplied.

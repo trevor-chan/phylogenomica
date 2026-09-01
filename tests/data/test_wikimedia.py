@@ -161,9 +161,18 @@ def _image_page(
         "title": f"File:{filename}",
         "imageinfo": [
             {
-                "url": f"https://upload.wikimedia.org/{filename}",
-                "descriptionurl": f"https://commons.wikimedia.org/wiki/File:{filename}",
-                "thumburl": f"https://upload.wikimedia.org/thumb/{filename}",
+                "url": (
+                    f"https://upload.wikimedia.org/{filename}"
+                    "?utm_source=commons.wikimedia.org&utm_campaign=imageinfo"
+                ),
+                "descriptionurl": (
+                    f"https://commons.wikimedia.org/wiki/File:{filename}"
+                    "?uselang=en&utm_source=api"
+                ),
+                "thumburl": (
+                    f"https://upload.wikimedia.org/thumb/{filename}"
+                    "?width=512&utm_source=commons"
+                ),
                 "mime": "image/jpeg",
                 "size": 1234,
                 "width": 1200,
@@ -267,6 +276,15 @@ def test_resolves_a_game_and_preserves_explicit_failure_outcomes(
     assert by_id[1]["selected_p18"] == "Resolved.jpg"
     assert by_id[1]["media"]["creator"] == "Jane Doe"
     assert by_id[1]["media"]["license_name"] == "CC BY-SA 4.0"
+    assert by_id[1]["media"]["original_url"].endswith(
+        "?utm_source=commons.wikimedia.org&utm_campaign=imageinfo"
+    )
+    assert by_id[1]["media"]["thumbnail_url"].endswith(
+        "?width=512&utm_source=commons"
+    )
+    assert by_id[1]["media"]["commons_page_url"].endswith(
+        "?uselang=en&utm_source=api"
+    )
     assert by_id[3]["status"] == "missing_wikidata_id"
     assert by_id[5]["status"] == "commons_page_missing"
     assert by_id[6]["media"]["missing_attribution_fields"] == [
@@ -332,6 +350,20 @@ def test_classifies_non_image_commons_media() -> None:
 
     assert status == "unsupported_media"
     assert media is None
+
+
+def test_classifies_an_image_without_a_download_url() -> None:
+    page = _image_page("No-url.jpg", artist="Example creator")
+    info = page["imageinfo"][0]  # type: ignore[index]
+    del info["url"]  # type: ignore[index]
+    del info["thumburl"]  # type: ignore[index]
+
+    status, media = _commons_media(page)
+
+    assert status == "missing_image_url"
+    assert media is not None
+    assert media["original_url"] is None
+    assert media["thumbnail_url"] is None
 
 
 def test_curl_transport_uses_an_argument_list_and_parses_json(monkeypatch) -> None:

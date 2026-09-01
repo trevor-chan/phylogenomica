@@ -48,6 +48,8 @@ code and documentation.
 - [Game design](docs/game_design.md) defines the rules and player experience.
 - [Data sources](docs/data_sources.md) defines provenance, licensing, and the
   local data lifecycle.
+- [Media rights](docs/media_rights.md) defines working-use, promotion,
+  attribution, and evidence policy for downloaded assets.
 - [Architecture](docs/architecture.md) defines the internal model and module
   boundaries.
 - [Roadmap](docs/roadmap.md) records phased delivery and open questions.
@@ -275,12 +277,18 @@ the display never implies an order the topology does not support. Branching
 points show the scientific clade name when OneZoom supplies one and the
 divergence age when known; internal tier indexes are not player-facing.
 
-Cards currently render without images. The historical snapshot's stored
-`media.eol.org` URLs now answer with a Cloudflare bot interstitial rather than
-image bytes, so each card falls back to a placeholder glyph; names and
-scientific names carry the phylogenetic signal, and the core puzzle does not
-depend on visual clues. See [data sources](docs/data_sources.md) for the
-evidence and the Wikidata-based fix.
+Cards use validated files from an ignored, dataset-level Wikimedia working
+library when one is present. The prototype auto-detects
+`assets/processed/wikimedia-library/<dataset>/manifest.json`, serves its files
+locally, and shows the normalized rights identifier plus full attribution in
+the card tooltip. It never hotlinks or downloads while a game is running.
+Species absent from the library retain the placeholder glyph. Pass
+`--media-library MANIFEST.json` to select a library explicitly.
+
+The historical snapshot's stored `media.eol.org` URLs now answer with a
+Cloudflare bot interstitial rather than image bytes. See
+[data sources](docs/data_sources.md) for the evidence and the Wikidata-based
+replacement workflow.
 
 Resolve replacement-image metadata for one generated game without downloading
 any media:
@@ -291,23 +299,42 @@ phylogenomica-resolve-wikimedia \
   --normalized-dir data/processed/onezoom/27400288
 ```
 
-The command batches stable Wikidata IDs into `wbgetentities` requests, resolves
+The resolver batches stable Wikidata IDs into `wbgetentities` requests, resolves
 ranked `P18` filenames through Commons `imageinfo`, and writes raw response
 evidence plus a normalized audit under ignored `data/cache/wikimedia/`. It
 distinguishes missing IDs, entities, images, Commons pages, unsupported media,
-and incomplete attribution. It intentionally downloads no images: every result
-still requires image and license review before promotion to `assets/gameplay/`.
-Use `--transport curl` when Conda Python cannot use the host system's trusted CA
-chain; both transports keep TLS verification enabled.
+and incomplete attribution. It intentionally downloads no image bytes.
+
+Merge that resolver output into the reusable working library:
+
+```bash
+phylogenomica-update-wikimedia-library \
+  data/cache/wikimedia/<dataset>/<game>/manifest.json \
+  --transport curl
+```
+
+The update is incremental across games. It validates and reuses an existing
+species asset when its normalized source fingerprint still matches, downloads
+only missing or changed recognized-rights records, preserves species from prior
+games, and atomically merges the new manifest. Content-addressed filenames keep
+a failed update from invalidating the prior library. Existing per-game download
+manifests can also be supplied to import and revalidate their local files
+without network traffic. Use `--transport curl` when Conda Python cannot use the
+host system's trusted CA chain; both transports keep TLS verification enabled.
+
+This library is still ignored working storage, not the final reviewed bundle
+under `assets/gameplay/`. The seeded pilot library contains 43 of the pilot
+game's 50 cards; the other seven continue to show placeholders.
 
 The current implementation covers reproducible acquisition, filtered
 extraction, normalized ingestion, biological-tree reconstruction, structural
 validation, read-only topology queries, batch target-feasibility analysis, a
 versioned per-target eligibility index, deterministic seeded relative
 selection, validated immutable game assembly, the UI-independent guess,
-reveal, and scoring engine, and a local browser prototype. The next milestone
-is licensed media plus a compact, reviewed gameplay bundle, so a clean clone
-can play without the ignored intermediates.
+reveal, and scoring engine, a local browser prototype, and an incremental local
+media library. The next milestone is promotion into a compact, reviewed
+gameplay bundle, so a clean clone can play with images without the ignored
+intermediates.
 
 The project is licensed under the [MIT License](LICENSE). Source datasets and
 media retain their own licenses and attribution requirements.

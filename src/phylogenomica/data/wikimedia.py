@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
 
 from phylogenomica.data.onezoom_download import build_ssl_context, sha256_file
@@ -35,7 +35,7 @@ from phylogenomica.generation.game import (
 )
 from phylogenomica.tree.preprocess import DEFAULT_NORMALIZED_DIR
 
-WIKIMEDIA_RESOLVER_VERSION = 1
+WIKIMEDIA_RESOLVER_VERSION = 2
 WIKIMEDIA_MANIFEST_SCHEMA_VERSION = 1
 WIKIDATA_API_URL = "https://www.wikidata.org/w/api.php"
 COMMONS_API_URL = "https://commons.wikimedia.org/w/api.php"
@@ -59,6 +59,7 @@ STATUS_DEFINITIONS = {
     "commons_page_missing": "The selected P18 filename has no Commons file page.",
     "missing_imageinfo": "The Commons file page returned no current image metadata.",
     "unsupported_media": "The selected Commons file is not an image media type.",
+    "missing_image_url": "The Commons image has no usable download URL.",
     "incomplete_attribution": (
         "The Commons metadata lacks a license name or creator/credit."
     ),
@@ -101,6 +102,25 @@ def _plain_text(value: object) -> str | None:
     parser.feed(str(value))
     rendered = " ".join("".join(parser.parts).split())
     return html.unescape(rendered) or None
+
+
+def _plain_scalar(value: object) -> str | None:
+    """Normalize a non-HTML API scalar without interpreting URL ampersands."""
+    if value is None:
+        return None
+    rendered = str(value).strip()
+    return rendered or None
+
+
+def _absolute_http_url(value: object) -> str | None:
+    """Return an absolute HTTP(S) URL without passing it through an HTML parser."""
+    rendered = _plain_scalar(value)
+    if rendered is None:
+        return None
+    parsed = urlsplit(rendered)
+    if parsed.scheme.casefold() not in {"http", "https"} or not parsed.netloc:
+        return None
+    return rendered
 
 
 def _now() -> datetime:
@@ -441,7 +461,7 @@ def _commons_media(page: Mapping[str, Any]) -> tuple[str, dict[str, object] | No
     info = imageinfo[0]
     if not isinstance(info, Mapping):
         return "missing_imageinfo", None
-    mime_type = _plain_text(info.get("mime"))
+    mime_type = _plain_scalar(info.get("mime"))
     if mime_type is None or not mime_type.startswith("image/"):
         return "unsupported_media", None
     extmetadata = info.get("extmetadata")
@@ -449,7 +469,7 @@ def _commons_media(page: Mapping[str, Any]) -> tuple[str, dict[str, object] | No
     creator = _plain_text(_metadata_value(metadata, "Artist"))
     credit = _plain_text(_metadata_value(metadata, "Credit"))
     license_name = _plain_text(_metadata_value(metadata, "LicenseShortName"))
-    license_url = _plain_text(_metadata_value(metadata, "LicenseUrl"))
+    license_url = _absolute_http_url(_metadata_value(metadata, "LicenseUrl"))
     missing_attribution = []
     if creator is None and credit is None:
         missing_attribution.append("creator_or_credit")
@@ -457,11 +477,11 @@ def _commons_media(page: Mapping[str, Any]) -> tuple[str, dict[str, object] | No
         missing_attribution.append("license_name")
     media: dict[str, object] = {
         "commons_title": str(page.get("title", "")),
-        "commons_page_url": _plain_text(
+        "commons_page_url": _absolute_http_url(
             info.get("descriptionurl") or info.get("descriptionshorturl")
         ),
-        "original_url": _plain_text(info.get("url")),
-        "thumbnail_url": _plain_text(info.get("thumburl")),
+        "original_url": _absolute_http_url(info.get("url")),
+        "thumbnail_url": _absolute_http_url(info.get("thumburl")),
         "mime_type": mime_type,
         "bytes": info.get("size") if isinstance(info.get("size"), int) else None,
         "width": info.get("width") if isinstance(info.get("width"), int) else None,
@@ -474,7 +494,7 @@ def _commons_media(page: Mapping[str, Any]) -> tuple[str, dict[str, object] | No
             if isinstance(info.get("thumbheight"), int)
             else None
         ),
-        "source_sha1": _plain_text(info.get("sha1")),
+        "source_sha1": _plain_scalar(info.get("sha1")),
         "creator": creator,
         "credit": credit,
         "license_name": license_name,
@@ -485,6 +505,8 @@ def _commons_media(page: Mapping[str, Any]) -> tuple[str, dict[str, object] | No
         ),
         "missing_attribution_fields": missing_attribution,
     }
+    if media["original_url"] is None and media["thumbnail_url"] is None:
+        return "missing_image_url", media
     if missing_attribution:
         return "incomplete_attribution", media
     return "resolved", media

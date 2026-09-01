@@ -98,6 +98,7 @@
   .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .en { font-weight: 600; font-size: .85rem; line-height: 1.2; }
   .sci { font-style: italic; color: var(--muted); font-size: .74rem; line-height: 1.2; }
+  .credit { color: var(--muted); font-size: .62rem; line-height: 1.2; }
   .meta { min-width: 0; }
   .meta > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .meta .en { white-space: normal; overflow-wrap: anywhere; }
@@ -436,13 +437,16 @@ function cardNode(card) {
 
   const thumb = document.createElement("div");
   thumb.className = "thumb";
-  const img = document.createElement("img");
-  img.loading = "lazy";
-  img.alt = "";
-  img.src = card.image_url;
-  // The snapshot's media host refuses hotlinked requests, so degrade to a glyph.
-  img.onerror = () => { thumb.textContent = "🧬"; };
-  thumb.appendChild(img);
+  if (card.image_url) {
+    const img = document.createElement("img");
+    img.loading = "lazy";
+    img.alt = "";
+    img.src = card.image_url;
+    img.onerror = () => { thumb.textContent = "🧬"; };
+    thumb.appendChild(img);
+  } else {
+    thumb.textContent = "🧬";
+  }
 
   const meta = document.createElement("div");
   meta.className = "meta";
@@ -453,8 +457,16 @@ function cardNode(card) {
   sci.className = "sci";
   sci.textContent = card.scientific_name;
   meta.append(en, sci);
+  if (card.image_attribution) {
+    const credit = document.createElement("div");
+    credit.className = "credit";
+    credit.textContent = card.license;
+    credit.title = card.image_attribution.text;
+    meta.appendChild(credit);
+  }
   node.append(thumb, meta);
-  node.title = `${card.english_name} — ${card.scientific_name}`;
+  node.title = `${card.english_name} — ${card.scientific_name}` +
+    (card.image_attribution ? `\n\n${card.image_attribution.text}` : "");
   if (card.state === "active") node.onclick = () => guess(card.species_id);
   return node;
 }

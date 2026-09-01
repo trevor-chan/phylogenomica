@@ -19,8 +19,15 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from phylogenomica.data.onezoom_ingest import DATABASE_FILENAME
+from phylogenomica.data.wikimedia_library import (
+    DEFAULT_LIBRARY_ROOT,
+    WikimediaLibrary,
+    WikimediaLibraryError,
+    load_wikimedia_library,
+)
 from phylogenomica.gameplay.engine import (
     GameplayError,
     GameState,
@@ -91,17 +98,32 @@ def _members_by_id(game: GeneratedGame) -> dict[int, GameMember]:
     }
 
 
-def _card(member: GameMember, placed: PlacedSpecies | None) -> dict[str, object]:
+def _card(
+    member: GameMember,
+    placed: PlacedSpecies | None,
+    media_library: WikimediaLibrary | None,
+) -> dict[str, object]:
     """Render one card, withholding the answer until the card is placed."""
     card = member.card
+    asset = (
+        None if media_library is None else media_library.asset(member.species_id)
+    )
     payload: dict[str, object] = {
         "species_id": member.species_id,
         "english_name": card.english_name,
         "scientific_name": card.scientific_name,
-        "image_url": card.image.url,
-        "rights": card.image.rights,
-        "license": card.image.license,
+        "image_url": (
+            None if asset is None else f"/media/{member.species_id}"
+        ),
+        "rights": None if asset is None else asset.attribution_text,
+        "license": None if asset is None else asset.license_name,
     }
+    if asset is not None:
+        payload["image_attribution"] = {
+            "text": asset.attribution_text,
+            "source_url": asset.commons_page_url,
+            "rights_url": asset.rights_url,
+        }
     if placed is None:
         payload["state"] = "active"
     else:
@@ -164,7 +186,11 @@ def _lineage(game: GeneratedGame, state: GameState) -> list[dict[str, object]]:
     ]
 
 
-def build_view(game: GeneratedGame, state: GameState) -> dict[str, object]:
+def build_view(
+    game: GeneratedGame,
+    state: GameState,
+    media_library: WikimediaLibrary | None = None,
+) -> dict[str, object]:
     """Render everything the page may know at this moment."""
     placed_by_id = {placed.species_id: placed for placed in state.placements}
     open_stage = None if state.completed else game.stages[state.current_stage_index]
@@ -172,7 +198,11 @@ def build_view(game: GeneratedGame, state: GameState) -> dict[str, object]:
         []
         if open_stage is None
         else [
-            _card(member, placed_by_id.get(member.species_id))
+            _card(
+                member,
+                placed_by_id.get(member.species_id),
+                media_library,
+            )
             for member in open_stage.members
         ]
     )
@@ -218,6 +248,10 @@ class _Handler(BaseHTTPRequestHandler):
     def _session(self) -> PrototypeSession:
         return self.server.session  # type: ignore[attr-defined]
 
+    @property
+    def _media_library(self) -> WikimediaLibrary | None:
+        return self.server.media_library  # type: ignore[attr-defined]
+
     def log_message(self, *_: object) -> None:  # pragma: no cover - quiet server
         pass
 
@@ -237,14 +271,35 @@ class _Handler(BaseHTTPRequestHandler):
         )
 
     def do_GET(self) -> None:  # noqa: N802 - http.server API
-        if self.path in ("/", "/index.html"):
+        path = urlsplit(self.path).path
+        if path in ("/", "/index.html"):
             self._send(
                 200, PAGE_PATH.read_bytes(), "text/html; charset=utf-8"
             )
-        elif self.path == "/api/view":
+        elif path == "/api/view":
             self._send_json(
-                200, build_view(self._session.game, self._session.state)
+                200,
+                build_view(
+                    self._session.game,
+                    self._session.state,
+                    self._media_library,
+                ),
             )
+        elif path.startswith("/media/"):
+            try:
+                species_id = int(path.removeprefix("/media/"))
+            except ValueError:
+                self._send_json(404, {"error": "not found"})
+                return
+            asset = (
+                None
+                if self._media_library is None
+                else self._media_library.asset(species_id)
+            )
+            if asset is None:
+                self._send_json(404, {"error": "not found"})
+                return
+            self._send(200, asset.path.read_bytes(), asset.mime_type)
         else:
             self._send_json(404, {"error": "not found"})
 
@@ -261,7 +316,14 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send_json(409, {"error": str(error)})
                 return
             self._send_json(
-                200, {"view": build_view(self._session.game, self._session.state)}
+                200,
+                {
+                    "view": build_view(
+                        self._session.game,
+                        self._session.state,
+                        self._media_library,
+                    )
+                },
             )
             return
         if self.path != "/api/guess":
@@ -287,7 +349,11 @@ class _Handler(BaseHTTPRequestHandler):
             200,
             {
                 "outcome": _outcome_payload(outcome),
-                "view": build_view(self._session.game, self._session.state),
+                "view": build_view(
+                    self._session.game,
+                    self._session.state,
+                    self._media_library,
+                ),
             },
         )
 
@@ -296,6 +362,7 @@ def serve(
     game: GeneratedGame,
     *,
     next_game: Callable[[GeneratedGame], GeneratedGame],
+    media_library: WikimediaLibrary | None = None,
     host: str = "127.0.0.1",
     port: int = 8000,
 ) -> ThreadingHTTPServer:
@@ -304,6 +371,7 @@ def serve(
     httpd.session = PrototypeSession.start(  # type: ignore[attr-defined]
         game, next_game
     )
+    httpd.media_library = media_library  # type: ignore[attr-defined]
     return httpd
 
 
@@ -322,6 +390,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--seed", type=int, default=0, help="relative-selection seed (default: 0)"
     )
     parser.add_argument("--normalized-dir", type=Path, default=DEFAULT_NORMALIZED_DIR)
+    parser.add_argument(
+        "--media-library",
+        type=Path,
+        help=(
+            "local Wikimedia library manifest (default: auto-detect the current "
+            "dataset under assets/processed/wikimedia-library)"
+        ),
+    )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument(
@@ -394,6 +470,25 @@ def _startup_summary(game: GeneratedGame) -> str:
     return f"game {game.game_id[:12]} - seed {game.seed}"
 
 
+def _load_media_library(
+    args: argparse.Namespace, game: GeneratedGame
+) -> WikimediaLibrary | None:
+    """Load an explicit library or auto-detect the current dataset's library."""
+    manifest_path = args.media_library
+    explicit = manifest_path is not None
+    if manifest_path is None:
+        manifest_path = DEFAULT_LIBRARY_ROOT / game.dataset_version / "manifest.json"
+    if not manifest_path.exists():
+        if explicit:
+            raise WikimediaLibraryError(
+                f"media library manifest does not exist: {manifest_path}"
+            )
+        return None
+    return load_wikimedia_library(
+        manifest_path, expected_dataset_version=game.dataset_version
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     try:
@@ -406,9 +501,15 @@ def main(argv: Sequence[str] | None = None) -> None:
     ) as error:
         raise SystemExit(str(error)) from error
 
+    try:
+        media_library = _load_media_library(args, game)
+    except WikimediaLibraryError as error:
+        raise SystemExit(str(error)) from error
+
     httpd = serve(
         game,
         next_game=_next_game_factory(args),
+        media_library=media_library,
         host=args.host,
         port=args.port,
     )

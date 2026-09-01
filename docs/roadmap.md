@@ -272,9 +272,10 @@ history.
 
 Status: in progress. Source-ID coverage for the historical rich-card universe
 is now measured: 44,185 of 44,361 species have a Wikidata ID. Resolver version
-1 and its fixture-based cache/failure audit are implemented. The initial pilot
-operates on one generated game's 50 unique species before any dataset-wide
-media request.
+2, its fixture-based cache/failure audit, a validating working-asset downloader,
+and an incremental dataset-level media library are implemented. The initial
+pilot operates on one generated game's 50 unique species before any
+dataset-wide media request.
 
 - Add ID-based Wikidata/Wikipedia fallbacks only where useful.
 - Improve image choice and attribution presentation.
@@ -290,8 +291,31 @@ resolver:
    type, dimensions, creator/credit, and explicit license fields.~~
 3. ~~Write raw responses and normalized resolved/unresolved records to ignored
    cache storage with retrieval timestamps and checksums.~~
-4. Run the live 50-species pilot and review its image and license audit before
-   downloading, transforming, or promoting any asset.
+4. ~~Run the live 50-species metadata pilot and audit its status, dimensions,
+   formats, and license fields.~~ The pilot found 43 fully resolved records,
+   three incomplete-attribution records, and four records without a Wikidata
+   `P18` path.
+5. ~~Fix URL normalization, rebuild from cached evidence, and validate a small
+   live download into ignored working assets.~~ All 46 candidate URL pairs were
+   restored from six cache hits. Three resolved JPEGs passed content-type,
+   signature, dimension, size, and checksum validation and were visually
+   confirmed as plausible images of their requested taxa.
+6. ~~Download the fully attributed pilot set and create an explicit visual
+   review surface.~~ All 43 resolved candidates passed machine validation with
+   no duplicate checksums. A local static page verifies the files again, saves
+   accept/conditional/reject/alternate decisions and notes in the browser, and
+   exports review JSON pinned to the download and rights manifests.
+7. ~~Implement an explicit liberal rights policy for working and promoted
+   assets.~~ Policy version 1 permits all recognized claims in ignored prototype
+   storage, classifies 33 pilot records as promotion-ready and 10 as
+   conditional, normalizes canonical rights URLs and identifiers, generates
+   attribution text, and makes the review page default to the policy decision.
+8. ~~Build an incremental species-keyed working library and connect it to the
+   prototype.~~ The builder imports prior downloads or consumes new resolver
+   manifests, reuses unchanged validated assets across games, retrieves only
+   missing or changed recognized-rights records, and merges atomically. The
+   prototype serves local images and attribution without runtime network
+   access. The pilot seeded 43 records, and a repeat import reused all 43.
 
 Missing Wikidata IDs, missing `P18`, missing Commons pages, unsupported media,
 and incomplete attribution must remain distinct unresolved outcomes. The
@@ -299,9 +323,11 @@ resolver must not silently fall back to a name search.
 
 The human/seed-42 pilot contains 48 Wikidata-linked species and two explicit
 missing-ID records (`Brucella abortus NCTC 8038` and `Escherichia coli
-99.1753`). Its first live lookup was correctly deferred by Wikidata's `maxlag`
-response, so no incomplete response was cached and the same command can resume
-when the service has recovered.
+99.1753`). The completed live run is documented in the
+[pilot audit](audits/wikimedia_human_seed_42.md). Wikimedia returned media for
+46 species, but three lack creator/credit. Resolver version 2 preserves the
+tracking query strings and reports usable original and thumbnail URLs for all
+46.
 
 Deliverable: richer cards without changing topology or answer semantics.
 
@@ -344,14 +370,14 @@ the core loop has passed data and gameplay validation.
 
 ## Immediate next action
 
-Rerun the cached 50-species Wikimedia metadata pilot after Wikidata's reported
-replication lag has cleared, inspect the resolved image choices and attribution
-fields, and document its status distribution. Only then download a small,
-reviewed subset into ignored working assets. Preserve explicit unresolved
-records and evaluate EOL/GBIF IDs as secondary paths rather than silently using
-fuzzy name matching. Hotlinking a third-party media host is not an acceptable
-runtime dependency in any case, so this is bundle work rather than a detour.
-Then measure the prospective runtime-bundle size and compact a reviewed,
-licensed subset under `data/gameplay/`, so a clean clone can play without the
-ignored intermediates. Keep the current production dump request open as the
-release-data upgrade path.
+Capture exact public-domain tags and source evidence for the seven conditional
+PD records, package the GFDL notice, and preserve the two nonstandard permission
+statements. Then build a promotion step that verifies the download, rights, and
+exported visual-review manifests before creating tracked runtime assets and an
+attribution index. In parallel, generate additional seeded games and feed their
+resolver manifests through the incremental library to measure reuse, coverage,
+and growth. Preserve explicit unresolved records and evaluate EOL/GBIF IDs as
+secondary paths rather than silently using fuzzy name matching. Finally compact
+a reviewed, licensed subset under `assets/gameplay/` and `data/gameplay/`, so a
+clean clone can play with images without ignored intermediates. Keep the current
+production dump request open as the release-data upgrade path.
