@@ -179,9 +179,7 @@
       Guided</button>
   </div>
   <div class="stats">
-    <div class="stat"><b id="score">0</b><small>banked</small></div>
-    <div class="stat"><b id="stake">0</b><small>at stake</small></div>
-    <div class="stat"><b id="best">0</b><small>best possible</small></div>
+    <div class="stat"><b id="score">0</b><small>score</small></div>
   </div>
 </header>
 
@@ -631,9 +629,7 @@ function render(view, outcome) {
   currentView = view;
   renderDifficulty(view);
   renderTargetPanel(view);
-  $("score").textContent = view.score;
-  $("stake").textContent = view.stage_at_stake;
-  $("best").textContent = `${view.best_achievable}/${view.maximum}`;
+  $("score").textContent = `${view.score}/${view.maximum}`;
   $("stage").textContent = view.completed
     ? "complete"
     : view.reviewing_stage
@@ -728,6 +724,11 @@ async function refreshMedia() {
   }
 }
 
+// Every guess pays for what it resolved, so the running score never falls.
+function plus(earned) {
+  return earned ? `+${earned}` : "+0";
+}
+
 function describe(outcome, view) {
   const box = $("feedback");
   box.className = "";
@@ -743,20 +744,24 @@ function describe(outcome, view) {
   } else if (outcome.stage_completed) {
     box.classList.add("good");
     box.textContent =
-      `Correct — the deepest branch. Stage scored ${outcome.stage_score}. ` +
+      "Correct — the deepest branch. " +
+      (outcome.earned ? `${plus(outcome.earned)}, ` : "") +
+      (outcome.perfect_stage ? "and a point for a clean stage. " : "") +
+      `Stage scored ${outcome.stage_score}. ` +
       "Review the completed relationships, then continue.";
   } else if (outcome.role === "mulligan") {
     box.classList.add("good");
     box.textContent =
-      `So close — second deepest. The +1 bonus cancels the guess, so this costs nothing. ` +
-      `${outcome.remaining} card(s) left.`;
+      `So close — second deepest. ${plus(outcome.earned)}, and it costs the ` +
+      `stage nothing. ${outcome.remaining} card(s) left.`;
   } else {
     box.classList.add("cost");
     box.textContent =
-      `More distant than the answer. −${outcome.penalty} ` +
+      `More distant than the answer. ${plus(outcome.earned)} — ` +
       (revealed
-        ? `(itself plus ${revealed} relative(s) it exposed as more distant). `
-        : "(nothing else was exposed). ") +
+        ? `${revealed} relative(s) resolved as more distant. `
+        : "nothing else was resolved. ") +
+      `The guess itself costs this stage one point. ` +
       `${outcome.remaining} card(s) left.`;
   }
 }

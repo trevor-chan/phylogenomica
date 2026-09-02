@@ -40,7 +40,6 @@ from phylogenomica.gameplay.engine import (
     GuessOutcome,
     PlacedSpecies,
     apply_guess,
-    best_achievable_score,
     dealt_members,
     initial_state,
     maximum_score,
@@ -48,7 +47,6 @@ from phylogenomica.gameplay.engine import (
     revealed_target,
     score,
     selectable_members,
-    stage_at_stake,
 )
 from phylogenomica.generation.eligibility import (
     ELIGIBILITY_DATABASE_FILENAME,
@@ -333,10 +331,6 @@ def build_view(
         ),
         "cards": cards,
         "score": score(game, state),
-        "stage_at_stake": (
-            0 if review_stage_index is not None else stage_at_stake(game, state)
-        ),
-        "best_achievable": best_achievable_score(game, state),
         "maximum": maximum_score(game, difficulty),
         "stage_scores": list(state.stage_scores),
         "completed": state.completed,
@@ -349,8 +343,8 @@ def _outcome_payload(outcome: GuessOutcome) -> dict[str, object]:
     return {
         "species_id": outcome.species_id,
         "role": outcome.role,
-        "penalty": outcome.penalty,
-        "bonus": outcome.bonus,
+        "earned": outcome.earned,
+        "missed": outcome.missed,
         "placed": [
             {"species_id": placed.species_id, "placement": placed.placement}
             for placed in outcome.placed
@@ -358,6 +352,7 @@ def _outcome_payload(outcome: GuessOutcome) -> dict[str, object]:
         "remaining": len(outcome.remaining_species_ids),
         "stage_completed": outcome.stage_completed,
         "stage_score": outcome.stage_score,
+        "perfect_stage": outcome.perfect_stage,
         "game_completed": outcome.game_completed,
     }
 

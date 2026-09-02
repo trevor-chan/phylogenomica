@@ -80,13 +80,22 @@ than reaching a player. Serialized games round-trip exactly and revalidate on
 load without their selection, which is the interface the gameplay engine will
 consume.
 
-Gameplay engine version 1 implements guess, reveal, scoring, and stage
-transitions over a loaded game. Its scoring is reveal-weighted: a stage is
-worth `N`, the stage-ending card is free, and any other card costs itself plus
-every still-active shallower relative it exposes. Against 25 random real
-targets, perfect play and the `mulligan → stage-ending` route both score 50,
-random play always terminates with all 50 species placed, and player state
-survives a serialization round trip.
+Gameplay engine version 1 implemented guess, reveal, scoring, and stage
+transitions over a loaded game. Against 25 random real targets, perfect play
+and the `mulligan → stage-ending` route both score 50, random play always
+terminates with all 50 species placed, and player state survives a
+serialization round trip.
+
+Its reveal-weighted scoring has since been replaced. Charging a wrong guess for
+everything it exposed made a confident near miss the most expensive move in the
+game, which inverts the skill the game teaches. Engine version 3 accrues score
+instead: a guess earns a point per scored card it resolves that the player did
+not choose, every wrong guess costs exactly one point however near it was, and
+a stage with no wrong guess in it earns one more. The mulligan is unscored in
+both directions, so a stage is scored over its decoys plus the card that ends
+it and both difficulties reach the same maximum. The interface shows one running
+score out of the maximum rather than banked, at-stake, and best-possible
+figures.
 
 A local browser prototype now plays a generated game end to end. The page is a
 renderer: every guess is resolved by the engine over a small JSON API, which is
@@ -230,7 +239,7 @@ Deliverable: deterministic sample games generated from the real dataset.
 
 ## Phase 7 — Gameplay engine
 
-Status: complete for the first engine and the reveal-weighted scoring model.
+Status: complete for the engine and the accrual scoring model.
 
 - ~~Implement active relatives, role-based guess processing, and reveals.~~
 - ~~Handle polytomy peers correctly.~~

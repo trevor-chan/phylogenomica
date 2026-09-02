@@ -41,9 +41,9 @@ There is no unavoidable chance in answering a represented stage. In a
 transition stage, the uniquely deepest selected relative is the unlock species
 and the uniquely second-deepest is the mulligan. In the ultimate stage, the
 target is the terminal choice and the mulligan is the deepest selected
-relative. Choosing a mulligan does not advance or end the stage, but awards a
-one-point bonus so `mulligan → unlock` or `mulligan → target` scores the same
-as choosing the stage-ending card immediately. The generator must never impose
+relative. Choosing a mulligan does not advance or end the stage, and is not
+scored either way, so `mulligan → unlock` or `mulligan → target` scores the
+same as choosing the stage-ending card immediately. The generator must never impose
 ordered relative roles across a polytomy.
 
 ### Target visibility is stage-scoped
@@ -265,9 +265,10 @@ completes the stage and descends to the next backbone region. The ultimate
 stage shows its relative cards and target card together; clicking the target
 completes the game.
 
-Choosing the mulligan does not complete the stage. It awards one bonus point,
-places the second-deepest relationship, and leaves the deeper unlock active.
-The bonus makes this route score-equivalent to choosing the unlock immediately.
+Choosing the mulligan does not complete the stage. It places the
+second-deepest relationship and leaves the deeper unlock active, at no cost:
+the mulligan is unscored, which makes this route score-equivalent to choosing
+the unlock immediately.
 
 If the chosen species is a decoy:
 
@@ -313,15 +314,17 @@ Naming the closest relative is then the whole task, which changes two things:
 - No mulligan is dealt. It exists to make the second-deepest relative tempting,
   and a visible target settles that comparison outright. The one exception is
   the ultimate stage, whose deepest relative is generated as its mulligan; that
-  card is dealt because it is the closest relative there.
+  card is dealt because it is the closest relative there, and is scored as the
+  card that ends the stage rather than as a mulligan.
 - The ultimate stage deals the target as an ordinary-looking card that cannot
   be chosen. The task is unchanged from every other stage: name the closest
   relative. Choosing it completes the game and places the target as the
   endpoint it was already known to be.
 
 Guided play therefore offers one fewer choice per stage than expert play of the
-same configuration, and a stage is worth one point per card it offers. Scores
-are comparable within a difficulty, not across them.
+same configuration. That missing choice is the unscored mulligan, so both modes
+score over the same cards and reach the same maximum; scores are directly
+comparable between them.
 
 Guided difficulty does not weaken any correctness rule. The engine still
 resolves every guess, the answer to the open stage is still withheld until it
@@ -329,42 +332,52 @@ is placed, and the target is the only thing the mode reveals early.
 
 ## Scoring
 
-The score represents relative relationships resolved without requiring a
-reveal. A mulligan guess awards one explicit bonus point; scoring must calibrate
-the corresponding extra guess or reveal so `mulligan → unlock` or `mulligan →
-target` and an immediate stage-ending choice produce the same stage score.
+The score counts relationships the player did not have to spend a guess on. It
+accrues from zero and never falls: every guess pays for what it resolved, and a
+wrong guess simply earns less than the guess that would have ended the stage.
+One number, out of the maximum, is the whole readout.
 
-The implementation must track revealed information, not merely incorrect
-clicks. One guess can expose several more-distant relationships, while guessing
-one member of a polytomy need not forfeit points associated with unresolved
-same-tier members. Exact presentation of score changes will be tested with the
-prototype.
+### Accrual model, version 2
 
-### Reveal-weighted model, version 1
+A stage is scored over its decoys plus the card that ends it — `N` cards, one
+point each — so a perfect game scores `M * N`. **The mulligan is outside the
+scoring system.** Until a stage ends there is nothing to distinguish the
+deepest relative from the second-deepest, so naming either is the same
+achievement: choosing the mulligan costs nothing, resolving it earns nothing,
+and it does not stop a stage from being clean.
 
-Each stage is worth `N` points, so a perfect game scores `M * N`.
-
-- The stage-ending card costs nothing. Choosing it resolves the whole stage.
-- Any other card costs one for itself plus one for every still-active relative
-  on a strictly shallower tier, because choosing it exposes those as more
-  distant. A wrong guess deep in a stage therefore costs more than a shallow
-  one: it collapses more of the tree at once.
-- A mulligan is a flat cost of one, cancelled by its bonus. Its reveals are
-  free, which is exactly what makes `mulligan → unlock` tie an immediate
-  unlock.
+- A guess earns one point for every scored card it resolves that the player did
+  not choose. The card the player chose earns nothing.
+- Ending a stage with no wrong guess in it earns one more point, so a clean
+  stage is worth every card the stage scores over.
 - Same-tier peers are never charged and never placed by a guess.
 
-Only decoys are ever charged, and each at most once, so a stage score never
-falls below one unlock plus one mulligan. Scores are therefore always positive
-and stage maxima are uniform across stages and games of one configuration.
+Equivalently, a stage scores `(N - 1) - w + b`, where `w` is the number of
+wrong guesses and `b` is one for a clean stage. **Every wrong guess costs
+exactly one point, however near or far it was.** A near miss resolves more
+relationships and therefore banks more points immediately, so narrowing the
+field is rewarded rather than charged. Because the mulligan is unscored,
+`mulligan → unlock` and an immediate unlock both score `N`, and a stage's floor
+is zero: spending a guess on every decoy leaves nothing to earn.
 
-The engine reports banked score and the open stage's standing value separately
-so the two are never conflated, and reports each guess's cost and bonus so the
-interface can frame them. An alternative model that counts tiers rather than
-relatives was considered and rejected because it makes stage maxima vary
-between games. A per-relative model in which the player earns each relationship
-they demonstrate was also rejected: it is provably equal to counting incorrect
-clicks.
+Stage maxima are uniform across stages and games of one configuration, and the
+two difficulties share them. Expert deals one card more per stage than guided,
+but that card is the unscored mulligan, so both modes score over the same
+cards; see [Difficulty](#difficulty).
+
+### Reveal-weighted model, version 1 (replaced)
+
+Version 1 charged a wrong guess one point for itself plus one for every
+still-active relative it exposed as more distant. A near miss therefore cost
+the most, because it collapsed the most structure at once.
+
+Playing it showed that penalty runs against the design: narrowing the field to
+a confident near miss is the skill the game is trying to teach, and version 1
+punished it harder than a wild guess. Version 2 replaces it. The per-relative
+model this document previously rejected — "provably equal to counting incorrect
+clicks" — is exactly the model now in use; that equivalence is the point rather
+than an objection to it. An alternative that counts tiers rather than relatives
+remains rejected, because it makes stage maxima vary between games.
 
 ## Continuous cladogram
 

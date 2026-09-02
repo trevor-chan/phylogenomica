@@ -31,8 +31,9 @@ from phylogenomica.generation.game import (
 )
 
 # Bumped when player state gains a field or a rule changes what a recorded
-# state means: version 2 added the difficulty a state is being played under.
-GAMEPLAY_ENGINE_VERSION = 2
+# state means: version 2 added the difficulty a state is being played under,
+# and version 3 replaced deducted stage stakes with accrued stage points.
+GAMEPLAY_ENGINE_VERSION = 3
 
 Placement = Literal["guessed", "revealed"]
 
@@ -92,8 +93,8 @@ class GameState:
     active_species_ids: tuple[int, ...]
     placements: tuple[PlacedSpecies, ...]
     stage_scores: tuple[int, ...]
-    stage_penalty: int
-    stage_bonus: int
+    stage_points: int
+    stage_misses: int
     completed: bool
 
     def to_dict(self) -> dict[str, object]:
@@ -109,14 +110,13 @@ class GuessOutcome:
     role: GameRole
     placed: tuple[PlacedSpecies, ...]
     remaining_species_ids: tuple[int, ...]
-    penalty: int
-    bonus: int
+    earned: int
+    missed: bool
     score: int
     score_change: int
-    stage_at_stake: int
-    best_achievable_score: int
     stage_completed: bool
     stage_score: int | None
+    perfect_stage: bool
     game_completed: bool
 
 
@@ -187,6 +187,26 @@ def selectable_members(
     )
 
 
+def scoring_members(
+    stage: GeneratedStage, difficulty: Difficulty = DEFAULT_DIFFICULTY
+) -> tuple[GameMember, ...]:
+    """Return the cards a stage's score is counted over.
+
+    The mulligan sits outside the scoring system: choosing it costs nothing and
+    resolving it earns nothing. Until a stage ends there is no distinguishing
+    the deepest relative from the second-deepest, so naming either one is the
+    same achievement and neither the guess nor the reveal should move the
+    score. Every stage therefore scores over its decoys plus the card that ends
+    it, which is the same nine cards in both difficulties.
+    """
+    ending = stage_ending_ids(stage, difficulty)
+    return tuple(
+        member
+        for member in selectable_members(stage, difficulty)
+        if member.role != "mulligan" or member.species_id in ending
+    )
+
+
 def revealed_target(
     game: GeneratedGame, difficulty: Difficulty = DEFAULT_DIFFICULTY
 ) -> GameMember | None:
@@ -204,15 +224,17 @@ def stage_maximum(
 ) -> int:
     """Return the points one stage is worth.
 
-    A stage is worth one point per card the player may choose from, so ending
-    a stage immediately banks every choice it never had to spend. Guided stages
-    are worth one point less than expert stages of the same configuration: they
-    deal no mulligan, and the target they show cannot be chosen.
+    A stage is worth one point per card it scores over. Ending it on the first
+    guess earns every one of them: one for each card the guess resolves
+    without the player spending a guess on it, and one more for a stage with
+    no wrong guess in it. Both difficulties score over the same cards — the
+    decoys plus the one that ends the stage — so a stage is worth the same in
+    either mode.
     """
-    choices = {len(selectable_members(stage, difficulty)) for stage in game.stages}
-    if len(choices) != 1:
-        raise GameplayError("stages do not present a uniform number of choices")
-    return choices.pop()
+    counted = {len(scoring_members(stage, difficulty)) for stage in game.stages}
+    if len(counted) != 1:
+        raise GameplayError("stages do not score over a uniform number of cards")
+    return counted.pop()
 
 
 def maximum_score(
@@ -222,46 +244,16 @@ def maximum_score(
     return stage_maximum(game, difficulty) * game.configuration.stages_per_game
 
 
-def _provisional_stage_score(game: GeneratedGame, state: GameState) -> int:
-    # Only decoys are ever charged, and each at most once, so a stage score
-    # never drops below one unlock plus one mulligan. The clamp is a guard.
-    return max(
-        0,
-        stage_maximum(game, state.difficulty)
-        - state.stage_penalty
-        + state.stage_bonus,
-    )
-
-
 def score(game: GeneratedGame, state: GameState) -> int:
-    """Return the points banked from completed stages.
+    """Return the running score, the stage in progress included.
 
-    Banked score only ever rises. The open stage's standing value is reported
-    separately by :func:`stage_at_stake` so the two are never conflated.
+    The score only ever rises. A guess earns a point for every card it resolves
+    that the player did not have to choose, so a wrong guess still pays for
+    what it revealed — it simply earns less than the guess that would have
+    ended the stage, and forfeits the clean-stage point. Nothing already earned
+    is ever taken back.
     """
-    return sum(state.stage_scores)
-
-
-def stage_at_stake(game: GeneratedGame, state: GameState) -> int:
-    """Return what the open stage is currently worth, or zero when none is."""
-    if state.completed:
-        return 0
-    return _provisional_stage_score(game, state)
-
-
-def forfeited_score(game: GeneratedGame, state: GameState) -> int:
-    """Return points already lost and no longer recoverable."""
-    reached = len(state.stage_scores) + (0 if state.completed else 1)
-    return (
-        stage_maximum(game, state.difficulty) * reached
-        - score(game, state)
-        - stage_at_stake(game, state)
-    )
-
-
-def best_achievable_score(game: GeneratedGame, state: GameState) -> int:
-    """Return the highest final score still reachable from this state."""
-    return maximum_score(game, state.difficulty) - forfeited_score(game, state)
+    return sum(state.stage_scores) + state.stage_points
 
 
 def initial_state(
@@ -280,8 +272,8 @@ def initial_state(
         ),
         placements=(),
         stage_scores=(),
-        stage_penalty=0,
-        stage_bonus=0,
+        stage_points=0,
+        stage_misses=0,
         completed=False,
     )
 
@@ -346,11 +338,10 @@ def apply_guess(
 
     ends_stage = species_id in stage_ending_ids(stage, state.difficulty)
     if ends_stage:
-        # The stage resolves in full, so nothing it reveals is charged. Every
-        # dealt card lands, including one the player was never allowed to
-        # choose: guided play's revealed target is the deepest of them and
-        # closes the cladogram as the endpoint it always was.
-        penalty, bonus = 0, 0
+        # The stage resolves in full. Every dealt card lands, including one the
+        # player was never allowed to choose: guided play's revealed target is
+        # the deepest of them and closes the cladogram as the endpoint it
+        # always was.
         stage_placed = {
             placed.species_id
             for placed in state.placements
@@ -366,14 +357,23 @@ def apply_guess(
             member,
             *sorted(unplaced, key=lambda other: (_depth(other), other.species_id)),
         ]
-    elif member.role == "mulligan":
-        # A flat cost the explicit bonus cancels, making mulligan into the
-        # stage-ending card score exactly like ending the stage immediately.
-        penalty, bonus = 1, 1
-        newly_placed = [member, *exposed]
     else:
-        penalty, bonus = 1 + len(exposed), 0
         newly_placed = [member, *exposed]
+
+    # A guess earns a point for every scored card it resolves that the player
+    # did not have to choose, and spends one for the scored card it chose. A
+    # stage therefore costs exactly the number of wrong guesses in it, however
+    # near or far each one was. The mulligan is not scored either way, so
+    # choosing it neither costs a point nor breaks a clean stage, and the stage
+    # that resolves it earns nothing for it.
+    scoring_ids = {
+        member.species_id
+        for member in scoring_members(stage, state.difficulty)
+    }
+    earned = sum(
+        1 for placed in newly_placed if placed.species_id in scoring_ids
+    ) - (1 if species_id in scoring_ids else 0)
+    missed = not ends_stage and species_id in scoring_ids
 
     placements = state.placements + _placed(
         newly_placed, stage_index=stage.stage_index, guessed_id=species_id
@@ -385,13 +385,13 @@ def apply_guess(
         if active_id not in placed_ids
     )
 
-    stage_penalty = state.stage_penalty + penalty
-    stage_bonus = state.stage_bonus + bonus
+    stage_points = state.stage_points + earned
+    stage_misses = state.stage_misses + (1 if missed else 0)
+    perfect_stage = ends_stage and stage_misses == 0
     if ends_stage:
-        finished = replace(
-            state, stage_penalty=stage_penalty, stage_bonus=stage_bonus
-        )
-        stage_score = _provisional_stage_score(game, finished)
+        # One more point for a stage with no wrong guess in it, so ending a
+        # stage cleanly is worth every card it offered.
+        stage_score = stage_points + (1 if perfect_stage else 0)
         next_index = stage.stage_index + 1
         completed = next_index == len(game.stages)
         new_state = GameState(
@@ -411,8 +411,8 @@ def apply_guess(
             ),
             placements=placements,
             stage_scores=(*state.stage_scores, stage_score),
-            stage_penalty=0,
-            stage_bonus=0,
+            stage_points=0,
+            stage_misses=0,
             completed=completed,
         )
     else:
@@ -421,8 +421,8 @@ def apply_guess(
             state,
             active_species_ids=remaining,
             placements=placements,
-            stage_penalty=stage_penalty,
-            stage_bonus=stage_bonus,
+            stage_points=stage_points,
+            stage_misses=stage_misses,
         )
 
     outcome = GuessOutcome(
@@ -431,14 +431,13 @@ def apply_guess(
         role=member.role,
         placed=placements[len(state.placements) :],
         remaining_species_ids=remaining,
-        penalty=penalty,
-        bonus=bonus,
+        earned=earned,
+        missed=missed,
         score=score(game, new_state),
         score_change=score(game, new_state) - score(game, state),
-        stage_at_stake=stage_at_stake(game, new_state),
-        best_achievable_score=best_achievable_score(game, new_state),
         stage_completed=ends_stage,
         stage_score=stage_score,
+        perfect_stage=perfect_stage,
         game_completed=new_state.completed,
     )
     return new_state, outcome
@@ -511,8 +510,8 @@ def restore_state(
             stage_scores=tuple(
                 int(value) for value in payload["stage_scores"]  # type: ignore[union-attr]
             ),
-            stage_penalty=int(payload["stage_penalty"]),  # type: ignore[arg-type]
-            stage_bonus=int(payload["stage_bonus"]),  # type: ignore[arg-type]
+            stage_points=int(payload["stage_points"]),  # type: ignore[arg-type]
+            stage_misses=int(payload["stage_misses"]),  # type: ignore[arg-type]
             completed=bool(payload["completed"]),
         )
     except (KeyError, TypeError, ValueError) as error:
@@ -531,9 +530,9 @@ def validate_state(game: GeneratedGame, state: GameState) -> None:
     if state.completed != (state.current_stage_index == len(game.stages)):
         raise GameplayError("completion flag disagrees with the current stage")
     if len(state.stage_scores) != state.current_stage_index:
-        raise GameplayError("banked stage scores disagree with the current stage")
-    if state.stage_penalty < 0 or state.stage_bonus < 0:
-        raise GameplayError("stage penalty and bonus must not be negative")
+        raise GameplayError("completed stage scores disagree with the current stage")
+    if state.stage_points < 0 or state.stage_misses < 0:
+        raise GameplayError("stage points and misses must not be negative")
 
     placed_ids = [placed.species_id for placed in state.placements]
     if len(placed_ids) != len(set(placed_ids)):
@@ -624,16 +623,17 @@ def main(argv: Sequence[str] | None = None) -> None:
         if outcome.stage_index != current_stage:
             current_stage = outcome.stage_index
             print(f"\nstage {current_stage}")
-        change = f"-{outcome.penalty}" if outcome.penalty else "0"
-        if outcome.bonus:
-            change += f" +{outcome.bonus} bonus"
+        change = f"+{outcome.earned}" if outcome.earned else "0"
+        if outcome.missed:
+            change += " (wrong)"
         print(
             f"  {outcome.role:<8} {names[outcome.species_id][:32]:<32} "
-            f"{change:>14}  at stake {outcome.stage_at_stake:>3}  "
+            f"{change:>14}  score {outcome.score:>3}  "
             f"{len(outcome.remaining_species_ids)} left"
         )
         if outcome.stage_completed:
-            print(f"  -> stage score {outcome.stage_score}")
+            perfect = " (clean stage, +1)" if outcome.perfect_stage else ""
+            print(f"  -> stage score {outcome.stage_score}{perfect}")
 
     print(
         f"\nscore {score(game, state)} / {maximum_score(game, args.difficulty)}"

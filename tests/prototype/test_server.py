@@ -230,7 +230,7 @@ def test_review_view_keeps_the_completed_stage_and_hides_the_next_one() -> None:
 
     assert view["reviewing_stage"] is True
     assert view["stage_index"] == 0
-    assert view["stage_at_stake"] == 0
+    assert view["score"] == 2
     assert [stage["stage_index"] for stage in view["lineage"]] == [0]
     assert {card["species_id"] for card in view["cards"]} == {
         DECOY_A,
@@ -257,8 +257,7 @@ def test_guided_play_reveals_the_target_and_deals_no_mulligan() -> None:
     assert [card["species_id"] for card in view["cards"]] == [DECOY_A, UNLOCK]
     assert all(card["selectable"] for card in view["cards"])
     assert [tier["tier_index"] for tier in view["lineage"][0]["tiers"]] == [0, 2]
-    # Two choices per stage rather than three, and five stages' worth of them.
-    assert view["stage_at_stake"] == 2
+    assert view["score"] == 0
     assert view["maximum"] == 4
 
 
@@ -297,7 +296,10 @@ def test_expert_play_is_unchanged_by_the_guided_option() -> None:
         UNLOCK,
     ]
     assert all(card["selectable"] for card in view["cards"])
-    assert view["maximum"] == 6
+    # Expert deals one card more than guided but scores over the same cards,
+    # because the extra card is the unscored mulligan.
+    assert view["maximum"] == build_view(game, initial_state(game, "guided"))["maximum"]
+    assert view["maximum"] == 4
 
 
 def test_session_switches_difficulty_by_restarting_the_target() -> None:
@@ -338,19 +340,22 @@ def test_reports_the_growing_cladogram() -> None:
     assert [s["species_id"] for s in stages[1]["target"]] == [TARGET]
 
 
-def test_reports_scores_alongside_the_board() -> None:
+def test_reports_one_running_score_out_of_the_maximum() -> None:
     game = _game()
 
     opening = build_view(game, initial_state(game))
     assert opening["score"] == 0
-    assert opening["stage_at_stake"] == 3
-    assert opening["best_achievable"] == opening["maximum"] == 6
+    assert opening["maximum"] == 4
+
+    # The open stage counts as it is played, so the score rises with the guess
+    # that resolves a relationship rather than waiting for the stage to end.
+    mid, _ = replay(game, [MULLIGAN_A])
+    assert build_view(game, mid)["score"] == 1
 
     state, _ = replay(game, [DECOY_A, UNLOCK, TARGET])
     finished = build_view(game, state)
-    assert finished["score"] == 5
-    assert finished["stage_scores"] == [2, 3]
-    assert finished["stage_at_stake"] == 0
+    assert finished["score"] == 2
+    assert finished["stage_scores"] == [0, 2]
 
 
 def test_session_guesses_and_plays_another_seed() -> None:
@@ -358,7 +363,9 @@ def test_session_guesses_and_plays_another_seed() -> None:
 
     outcome = session.guess(MULLIGAN_A)
     assert outcome.role == "mulligan"
-    assert session.state.stage_bonus == 1
+    # The mulligan is unscored: it earns only the decoy it resolved, and the
+    # stage stays clean.
+    assert (session.state.stage_points, session.state.stage_misses) == (1, 0)
 
     session.play_again()
     assert session.game.seed == 8
@@ -623,13 +630,17 @@ def test_resolves_guesses_over_http(server: str) -> None:
     assert status == 200
     outcome = payload["outcome"]
     assert outcome["role"] == "decoy"
-    assert outcome["penalty"] == 1
+    assert outcome["earned"] == 0  # the most distant card resolves nothing
+    assert outcome["missed"] is True
     assert outcome["remaining"] == 2
     assert outcome["stage_completed"] is False
-    assert payload["view"]["stage_at_stake"] == 2
+    assert payload["view"]["score"] == 0
 
     status, payload = _post(server, "/api/guess", {"species_id": UNLOCK})
     assert payload["outcome"]["stage_completed"] is True
+    assert payload["outcome"]["perfect_stage"] is False
+    assert payload["outcome"]["stage_score"] == 0
+    assert payload["view"]["score"] == 0
     assert payload["view"]["reviewing_stage"] is True
     assert payload["view"]["stage_index"] == 0
 

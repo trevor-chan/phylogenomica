@@ -73,10 +73,11 @@ Owns active relatives, guesses, reveals, scoring, stage transitions, game
 completion, and serializable player state. It operates on an already validated
 game and does not query upstream databases.
 
-Gameplay engine version 2 is a pure transition function over immutable state:
+Gameplay engine version 3 is a pure transition function over immutable state:
 `apply_guess(game, state, species_id)` returns the next `GameState` and a
-`GuessOutcome` carrying every placement, the remaining relatives, the cost and
-bonus, banked score, the open stage's standing value, and completion flags. The
+`GuessOutcome` carrying every placement, the remaining relatives, the points
+the guess earned, whether it was a wrong guess, the running score, and
+completion flags. The
 engine does not revalidate the game; it consumes one already checked by
 `validate_game_structure`. `restore_state` rebuilds player state and confirms
 it is a reachable position in that specific game.
@@ -84,8 +85,11 @@ it is a reachable position in that specific game.
 The engine also owns difficulty. `dealt_members`, `selectable_members`,
 `stage_ending_ids`, and `revealed_target` derive a stage's cards, its choices,
 its stage-ending card, and any revealed target from the difficulty a state
-records; `stage_maximum` derives that stage's points from the choices it
-offers. Generation is untouched by difficulty: one generated game serves both
+records; `scoring_members` narrows the choices to the cards a stage's score is counted
+over, and `stage_maximum` derives that stage's points from them. Score accrues rather than depletes: state carries the points earned in
+the open stage and the number of wrong guesses in it, and `score` returns the
+running total with that stage included, so there is no separate banked figure
+to reconcile. Generation is untouched by difficulty: one generated game serves both
 modes, so a seed produces one topology and switching modes cannot change what
 is true about the lineage. Player state carries its own difficulty, and a state
 relabelled as the other mode fails validation rather than being reinterpreted.
@@ -497,14 +501,17 @@ For chosen species `x`, inspect its immutable stage role.
 - If it is an unlock species, complete the transition stage and incorporate its
   remaining structure.
 - If it is the target, complete the ultimate stage and the game.
-- If it is the mulligan, award one bonus point, place its relationship, and
-  keep the stage-ending unlock or target active. Scoring makes this route
+- If it is the mulligan, place its relationship and keep the stage-ending
+  unlock or target active. The mulligan is not scored, so this route is
   equivalent to choosing that card immediately.
 - If it is a decoy, reveal only the information implied by its tier; preserve
   same-tier peers and every deeper relative as required by the game rules.
 
-The engine returns a transition describing placements, remaining relatives,
-score change, and completion. The frontend renders that transition and never
+Each guess earns one point per scored card it resolves that the player did not
+choose, and a stage with no wrong guess in it earns one more. A stage scores
+over its decoys plus the card that ends it; the mulligan is outside that set. The engine
+returns a transition describing placements, remaining relatives, score change,
+and completion. The frontend renders that transition and never
 recomputes it.
 
 ## Validation
