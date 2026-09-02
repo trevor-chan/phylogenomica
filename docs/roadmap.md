@@ -269,7 +269,7 @@ Deliverable: a functional prototype for evaluating the core mechanic.
 Status: complete.
 
 - ~~Distinguish resolved, unresolved, inferred, and revealed structure.~~ A
-  solid trunk is resolved and a dashed one is the concealed continuation;
+  solid trunk is resolved and a dashed one is the unresolved target clade;
   filled tips are inferred by the player and hollow tips were revealed.
 - ~~Render polytomies without false ordering.~~ Same-tier relatives branch from
   a single trunk node as a rake, so no order is implied among them.

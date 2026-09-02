@@ -176,6 +176,7 @@ def test_reserves_anonymous_stage_slots_before_any_species_is_placed() -> None:
     assert len(tiers) == 3
     assert [tier["slot_count"] for tier in tiers] == [1, 1, 1]
     assert all(tier["species"] == [] for tier in tiers)
+    assert [tier["slot_role"] for tier in tiers] == [None, "mulligan", "unlock"]
     # The divergence age labels the empty branching event so the player can
     # read the clade's shape in time, but the clade name is the answer in
     # words and waits until its first species is placed.
@@ -227,6 +228,10 @@ def test_shows_the_target_as_a_normal_card_in_the_ultimate_stage() -> None:
     # Even here it is indistinguishable from a decoy until it is chosen.
     assert "role" not in target
     assert target["english_name"] == f"Common {TARGET}"
+    assert [tier["slot_role"] for tier in view["lineage"][1]["tiers"]] == [
+        None,
+        "mulligan",
+    ]
 
 
 def test_review_view_keeps_the_completed_stage_and_hides_the_next_one() -> None:
@@ -264,6 +269,10 @@ def test_guided_play_reveals_the_target_and_deals_no_mulligan() -> None:
     assert [card["species_id"] for card in view["cards"]] == [DECOY_A, UNLOCK]
     assert all(card["selectable"] for card in view["cards"])
     assert [tier["tier_index"] for tier in view["lineage"][0]["tiers"]] == [0, 2]
+    assert [tier["slot_role"] for tier in view["lineage"][0]["tiers"]] == [
+        None,
+        "unlock",
+    ]
     assert view["score"] == 0
     assert view["maximum"] == 4
 
@@ -280,6 +289,11 @@ def test_guided_ultimate_stage_deals_the_target_without_offering_it() -> None:
     assert cards[TARGET]["state"] == "revealed"
     assert cards[TARGET]["role"] == "target"
     assert cards[MULLIGAN_B]["selectable"] is True
+    # The ultimate-stage mulligan is the answer in guided play, not a bonus.
+    assert [tier["slot_role"] for tier in view["lineage"][1]["tiers"]] == [
+        None,
+        None,
+    ]
 
     # Naming the closest relative ends the game and closes the cladogram.
     final = build_view(game, replay(game, [UNLOCK, MULLIGAN_B], "guided")[0])
@@ -343,6 +357,8 @@ def test_reports_the_growing_cladogram() -> None:
     assert first["english_name"] == f"Common {DECOY_A}"
     assert first["placement"] == "revealed"
     assert stages[0]["tiers"][1]["species"][0]["placement"] == "guessed"
+    assert stages[0]["tiers"][1]["species"][0]["role"] == "mulligan"
+    assert stages[0]["tiers"][2]["species"][0]["role"] == "unlock"
     # The target hangs off the end of the backbone, not off a tier.
     assert [s["species_id"] for s in stages[1]["target"]] == [TARGET]
 
@@ -569,6 +585,12 @@ def test_serves_the_page_and_the_view(server: str) -> None:
     assert b"slotCount: Number.isInteger(tier.slot_count)" in page
     assert b"length: tier.slotCount" in page
     assert b"setTimeout(refreshMedia, 1000)" in page
+    assert b'const SLOT_HINTS = { mulligan: "+1", unlock: "guess me" }' in page
+    assert b"if (labelled && tier.slotRole)" in page
+    assert b".slot-hint, .unknown" in page
+    assert b"fill: var(--muted); font-size: 15px; font-style: italic" in page
+    assert b'"target clade", "unknown"' in page
+    assert b"hidden continuation" not in page
 
     status, body = _get(server, "/api/view")
     assert status == 200

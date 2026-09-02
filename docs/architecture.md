@@ -169,23 +169,26 @@ The cladogram is the interface. Its SVG is a rooted rectangular tree growing
 left to right: tiers are nested branching events, while every species is a
 terminal leaf on one right-hand boundary. A tier with several relatives is one
 rake/polytomy rather than a sequence of invented splits. The server exposes the
-current stage's topology as anonymous fixed slots, withholding the identity,
-role, and clade label of each unpopulated slot. Slots reserve only the geometry
-of the cards the difficulty deals, so a tier that is not in play is absent
-rather than drawn as an unfillable blank. Divergence age describes the
-branching event rather than any card, so it labels a tier from stage opening;
-an age on an event with no placed species renders as a provisional label. Placements carry a stable
-within-tier slot index, so existing leaves never move when another card is
-placed. Completed stages use moderately compact horizontal bands and
-tooltip-labelled leaves; the current stage receives the remaining width and
-height plus readable species labels.
+current stage's topology as anonymous fixed slots, withholding the identity and
+clade label of each unpopulated slot. Expert-mode mulligan slots carry a `+1`
+hint, and unlock slots carry a *guess me* hint. Both match the light gray,
+italicized *target clade* label without mapping an active card to either slot.
+Slots reserve only the geometry of the cards the difficulty deals, so a tier
+that is not in play is absent rather than drawn as an unfillable blank.
+Divergence age describes the branching event rather than any card, so it labels
+a tier from stage opening; an age on an event with no placed species renders as
+a provisional label. Placements carry a stable within-tier slot index, so
+existing leaves never move when another card is placed, at which point any slot
+hint is replaced by its species name. Completed stages use moderately compact
+horizontal bands and tooltip-labelled leaves; the current stage receives the
+remaining width and height plus readable species labels.
 The SVG dimensions follow the board viewport, so normal play remains within a
 single screen rather than growing with the lineage. Optional clade names and divergence
 ages label current-stage internal nodes but never affect layout or
 correctness. Cards for the open stage occupy a separate row beneath the board.
 Stroke style separates resolved from unresolved, tip fill separates inferred
 from revealed, a hollow internal node marks a polytomy, and a dashed terminal
-branch marks the concealed continuation. Open-stage cards stay in fixed tray
+branch marks the unresolved target clade. Open-stage cards stay in fixed tray
 positions and dimensions after placement. Anonymous geometry cannot leak the
 card-to-tier answer, and the frontend never reconstructs correctness.
 

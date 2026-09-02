@@ -5,11 +5,13 @@ The page is a renderer. Every guess is resolved by
 returned transition without recomputing correctness.
 
 The API is stage-scoped: it serves only the cards of the open stage, and it
-reveals a card's tier and role only once that card has been placed. The
-concealed target and the answer to the open stage therefore never cross the
-wire early, even to a player reading the network traffic. Guided difficulty
-reveals the target deliberately, and only the target: the answer to the open
-stage stays concealed exactly as it is in expert play.
+reveals a card's tier and role only once that card has been placed. Anonymous
+tree slots may advertise a mulligan or unlock role, but no active card is
+mapped to one of those slots. The concealed target and the card-to-slot answer
+therefore never cross the wire early, even to a player reading the network
+traffic. Guided difficulty reveals the target deliberately, and only the
+target: the answer to the open stage stays concealed exactly as it is in expert
+play.
 """
 
 from __future__ import annotations
@@ -241,7 +243,9 @@ def _lineage(
 
     Slots reserve the geometry of the cards actually in play. A tier this
     difficulty does not deal is not a slot the player can ever fill, so it is
-    left out of the tree rather than drawn as an unreachable blank.
+    left out of the tree rather than drawn as an unreachable blank. Empty
+    mulligan slots in expert play and empty unlock slots in either difficulty
+    advertise those roles without identifying which active card fills them.
     """
     members = _members_by_id(game)
     placements: dict[tuple[int, int | None], list[PlacedSpecies]] = {}
@@ -297,10 +301,18 @@ def _lineage(
             # the clade without naming it. The clade name is the answer in
             # words and stays hidden until a species populates the event.
             populated = bool(rendered_species)
+            tier_role = members[dealt_slots[0]].role
+            slot_role = (
+                tier_role
+                if tier_role == "unlock"
+                or (difficulty == "expert" and tier_role == "mulligan")
+                else None
+            )
             rendered_tiers.append(
                 {
                     "tier_index": tier.tier_index,
                     "slot_count": len(dealt_slots),
+                    "slot_role": slot_role,
                     "age_ma": tier.age_ma,
                     "clade_name": tier.clade_name if populated else None,
                     "populated": populated,

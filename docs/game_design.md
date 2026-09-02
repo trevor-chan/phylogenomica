@@ -387,7 +387,7 @@ All stage results extend one persistent cladogram. The display distinguishes:
 - resolved from unresolved branches;
 - inferred from revealed relationships;
 - polytomies from ordered divergence levels;
-- the hidden continuation toward the target.
+- the unresolved target clade.
 
 The view can zoom toward the active branch while retaining access to the full
 history. Divergence ages are optional labels and never determine correctness.
@@ -398,10 +398,16 @@ unresolved, tip fill carries inferred versus revealed, and a polytomy is a rake
 from one trunk node rather than a nested sequence. At stage opening it draws
 the complete geometry as anonymous empty leaf slots, each branching event
 labelled with its divergence age so the player can read the clade's shape in
-time before any card identifies it. It sends no unplaced species-to-slot
-mapping, role, or clade name. Placements fill
+time before any card identifies it. Expert mode labels an empty mulligan slot
+with `+1`, and both modes label an empty unlock slot with *guess me*. Both hints
+match the light gray, italicized *target clade* label. It sends no unplaced
+species-to-slot mapping or clade name. Placements fill
 stable slots without reflow, so the board remains trackable without disclosing
 the open stage's answer.
+
+When a hinted slot is populated by either a guess or a reveal, its hint is
+replaced by the species name. The hint identifies a destination on the tree,
+not which shuffled card belongs there.
 
 ## Endgame
 

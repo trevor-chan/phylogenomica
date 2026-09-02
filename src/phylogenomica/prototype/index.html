@@ -253,7 +253,7 @@
 </div>
 
 <footer>
-  <p id="feedback">Pick the card whose most recent common ancestor with the hidden target is the newest.</p>
+  <p id="feedback">Pick the closest relative to the hidden target species.</p>
   <div class="tray">
     <div id="target-panel" hidden></div>
     <div id="cards"></div>
@@ -272,6 +272,7 @@ const HISTORY_STAGE_WIDTH = 152;
 // labels, and the board scrolls rather than compressing them away.
 const EXPANDED_STAGE_WIDTH = 200, EXPANDED_LEAF_HEIGHT = 30;
 const DETAIL_DELAY = 320;
+const SLOT_HINTS = { mulligan: "+1", unlock: "guess me" };
 let scale = 1, follow = true, busy = false;
 let currentView = null, resizeTimer = null, mediaTimer = null;
 let detailTimer = null, detailIndex = new Map(), expandedOnce = false;
@@ -313,6 +314,7 @@ function columns(view) {
         populated: tier.populated !== undefined
           ? tier.populated
           : tier.species.length > 0,
+        slotRole: tier.slot_role || null,
         slotCount: Number.isInteger(tier.slot_count)
           ? tier.slot_count
           : tier.species.length,
@@ -493,6 +495,12 @@ function renderTree(view) {
         svg.appendChild(el("circle", {
           cx: leafX, cy: y, r: labelled ? 4 : 2.5, class: "tip unknown-tip",
         }));
+        if (labelled && tier.slotRole) {
+          svg.appendChild(text(
+            leafX + 10, y + 4, SLOT_HINTS[tier.slotRole],
+            `slot-hint ${tier.slotRole}`,
+          ));
+        }
         return;
       }
       svg.appendChild(el("circle", {
@@ -541,7 +549,7 @@ function renderTree(view) {
     svg.appendChild(el("circle", {
       cx: leafX, cy: endpoint.y, r: 5, class: "tip unknown-tip",
     }));
-    svg.appendChild(text(leafX + 10, endpoint.y + 4, "hidden continuation", "unknown"));
+    svg.appendChild(text(leafX + 10, endpoint.y + 4, "target clade", "unknown"));
   }
 
   host.appendChild(svg);
@@ -601,14 +609,17 @@ function styleBlock() {
     .en { font-weight: 600; }
     .en.mulligan { fill: var(--warn); }
     .en.unlock, .en.target { fill: var(--good); }
+    .slot-hint, .unknown {
+      fill: var(--muted); font-size: 15px; font-style: italic; font-weight: 400;
+    }
     .sci { font-size: 10px; font-style: italic; fill: var(--muted); }
     .tierlabel, .stagelabel { font-size: 9.5px; fill: var(--muted); letter-spacing: .04em; }
     .tierlabel.history { display: none; }
     .tierlabel.pending { fill: var(--faint); font-style: italic; }
     .stagelabel.active { fill: var(--accent); font-weight: 700; }
-    .unknown { font-size: 15px; fill: var(--muted); font-style: italic; }
     /* Zoomed far out, labels are unreadable noise: show structure instead. */
-    .compact .en, .compact .sci, .compact .tierlabel { display: none; }
+    .compact .en, .compact .sci, .compact .tierlabel,
+    .compact .slot-hint { display: none; }
     .compact .stagelabel { font-size: 22px; }
   `;
   return style;
@@ -878,8 +889,8 @@ function renderDifficulty(view) {
 
 function openingPrompt(view) {
   return view.difficulty === "guided"
-    ? "Pick the card whose most recent common ancestor with the target is the newest."
-    : "Pick the card whose most recent common ancestor with the hidden target is the newest.";
+    ? "Pick the closest relative to the target species."
+    : "Pick the closest relative to the hidden target species.";
 }
 
 function render(view, outcome) {
@@ -923,13 +934,12 @@ function render(view, outcome) {
   else if (view.completed) {
     $("feedback").className = "good";
     $("feedback").textContent =
-      `Final score ${view.score} of ${view.maximum}. The whole lineage is ` +
-      "open above — hover any name for its picture and description.";
+      `Final score ${view.score} of ${view.maximum}.`;
   } else if (view.reviewing_stage) {
     const stageScore = view.stage_scores[view.stage_scores.length - 1];
     $("feedback").className = "good";
     $("feedback").textContent =
-      `Stage scored ${stageScore}. Review the completed relationships.`;
+      `Stage score: ${stageScore}.`;
   }
   appendContinue(view);
 }
@@ -1028,30 +1038,27 @@ function describe(outcome, view) {
     // Guided play ends on the closest relative; expert play ends on the target.
     box.textContent =
       (outcome.role === "target"
-        ? "That was the target. "
-        : "Correct — the closest relative to the target. ") +
-      `Final score ${view.score} of ${view.maximum}.`;
+        ? "You guessed the target! "
+        : "Correct — you found the closest relative. ") +
+      `Your final score is ${view.score} of ${view.maximum}.`;
   } else if (outcome.stage_completed) {
     box.classList.add("good");
     box.textContent =
-      "Correct — the deepest branch. " +
+      "Correct — you found the deepest branch. " +
       (outcome.earned ? `${plus(outcome.earned)}, ` : "") +
-      (outcome.perfect_stage ? "and a point for a clean stage. " : "") +
-      `Stage scored ${outcome.stage_score}. ` +
-      "Review the completed relationships, then continue.";
+      (outcome.perfect_stage ? "+ 1 bonus point. " : "") +
+      `Stage score ${outcome.stage_score}.`;
   } else if (outcome.role === "mulligan") {
     box.classList.add("good");
     box.textContent =
-      `So close — second deepest. ${plus(outcome.earned)}, and it costs the ` +
-      `stage nothing. ${outcome.remaining} card(s) left.`;
+      `Close enough. ${plus(outcome.earned)}.`;
   } else {
     box.classList.add("cost");
     box.textContent =
-      `More distant than the answer. ${plus(outcome.earned)} — ` +
+      `Good guess. ${plus(outcome.earned)} points — ` +
       (revealed
-        ? `${revealed} relative(s) resolved as more distant. `
-        : "nothing else was resolved. ") +
-      `The guess itself costs this stage one point. ` +
+        ? `${revealed} relative(s) are more distant. `
+        : "") +
       `${outcome.remaining} card(s) left.`;
   }
 }
@@ -1134,7 +1141,7 @@ async function continueStage() {
     if (!res.ok) { $("feedback").textContent = data.error; return; }
     render(data.view);
     $("feedback").className = "";
-    $("feedback").textContent = "New stage. Find the closest relative.";
+    $("feedback").textContent = "Find the closest relative.";
   } finally {
     busy = false;
   }
