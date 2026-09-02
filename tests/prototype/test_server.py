@@ -243,6 +243,82 @@ def test_review_view_keeps_the_completed_stage_and_hides_the_next_one() -> None:
     })
 
 
+def test_guided_play_reveals_the_target_and_deals_no_mulligan() -> None:
+    game = _game()
+
+    view = build_view(game, initial_state(game, "guided"))
+
+    assert view["difficulty"] == "guided"
+    assert view["target"]["species_id"] == TARGET
+    assert view["target"]["english_name"] == f"Common {TARGET}"
+    assert view["target"]["selectable"] is False
+    assert view["target"]["role"] == "target"
+    # The mulligan is not dealt, so it is neither a card nor a tree slot.
+    assert [card["species_id"] for card in view["cards"]] == [DECOY_A, UNLOCK]
+    assert all(card["selectable"] for card in view["cards"])
+    assert [tier["tier_index"] for tier in view["lineage"][0]["tiers"]] == [0, 2]
+    # Two choices per stage rather than three, and five stages' worth of them.
+    assert view["stage_at_stake"] == 2
+    assert view["maximum"] == 4
+
+
+def test_guided_ultimate_stage_deals_the_target_without_offering_it() -> None:
+    game = _game()
+    state, _ = replay(game, [UNLOCK], "guided")
+
+    view = build_view(game, state)
+
+    cards = {card["species_id"]: card for card in view["cards"]}
+    assert set(cards) == {DECOY_B, MULLIGAN_B, TARGET}
+    assert cards[TARGET]["selectable"] is False
+    assert cards[TARGET]["state"] == "revealed"
+    assert cards[TARGET]["role"] == "target"
+    assert cards[MULLIGAN_B]["selectable"] is True
+
+    # Naming the closest relative ends the game and closes the cladogram.
+    final = build_view(game, replay(game, [UNLOCK, MULLIGAN_B], "guided")[0])
+    assert final["completed"] is True
+    assert final["score"] == final["maximum"] == 4
+    assert [t["english_name"] for s in final["lineage"] for t in s["target"]] == [
+        f"Common {TARGET}"
+    ]
+
+
+def test_expert_play_is_unchanged_by_the_guided_option() -> None:
+    game = _game()
+
+    view = build_view(game, initial_state(game))
+
+    assert view["difficulty"] == "expert"
+    assert view["target"] is None
+    assert [card["species_id"] for card in view["cards"]] == [
+        DECOY_A,
+        MULLIGAN_A,
+        UNLOCK,
+    ]
+    assert all(card["selectable"] for card in view["cards"])
+    assert view["maximum"] == 6
+
+
+def test_session_switches_difficulty_by_restarting_the_target() -> None:
+    session = PrototypeSession.start(_game(), _next_game)
+    session.guess(DECOY_A)
+
+    session.set_difficulty("guided")
+
+    assert session.difficulty == "guided"
+    assert session.state == initial_state(session.game, "guided")
+    assert session.game.game_id == "a" * 64  # the same target, restarted
+    assert session.review_stage_index is None
+    with pytest.raises(GameplayError, match="unknown difficulty"):
+        session.set_difficulty("easy")
+
+    # A new game keeps the difficulty the player chose.
+    session.play_again()
+    assert session.difficulty == "guided"
+    assert session.state == initial_state(session.game, "guided")
+
+
 def test_reports_the_growing_cladogram() -> None:
     game = _game()
     state, _ = replay(game, [MULLIGAN_A, UNLOCK, TARGET])
@@ -504,7 +580,7 @@ def test_server_reports_download_progress_and_queues_play_again(
         def request(self, game):
             self.requests.append(game.game_id)
 
-        def player_status(self, _game, _stage_index):
+        def player_status(self, _game, _stage_index, also_shown=()):
             return {
                 "enabled": True,
                 "state": "ready",
@@ -567,8 +643,33 @@ def test_resolves_guesses_over_http(server: str) -> None:
     assert payload["view"]["score"] == 0
 
 
+def test_switches_difficulty_over_http(server: str) -> None:
+    status, payload = _post(server, "/api/difficulty", {"difficulty": "guided"})
+
+    assert status == 200
+    view = payload["view"]
+    assert view["difficulty"] == "guided"
+    assert view["target"]["species_id"] == TARGET
+    assert [card["species_id"] for card in view["cards"]] == [DECOY_A, UNLOCK]
+
+    status, payload = _post(server, "/api/guess", {"species_id": UNLOCK})
+    assert payload["outcome"]["stage_completed"] is True
+    _post(server, "/api/continue")
+    with pytest.raises(urllib.error.HTTPError) as caught:
+        _post(server, "/api/guess", {"species_id": TARGET})
+    assert caught.value.code == 409
+    assert "revealed target" in json.loads(caught.value.read())["error"]
+
+    status, payload = _post(server, "/api/difficulty", {"difficulty": "expert"})
+    assert payload["view"]["difficulty"] == "expert"
+    assert payload["view"]["target"] is None
+    assert payload["view"]["stage_index"] == 0
+
+
 def test_rejects_bad_requests(server: str) -> None:
     for path, body, status in (
+        ("/api/difficulty", {"difficulty": "easy"}, 409),
+        ("/api/difficulty", {}, 400),
         ("/api/guess", {"species_id": 999}, 409),
         ("/api/guess", {"species_id": TARGET}, 409),
         ("/api/guess", {}, 400),

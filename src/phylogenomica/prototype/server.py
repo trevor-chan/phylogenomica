@@ -7,7 +7,9 @@ returned transition without recomputing correctness.
 The API is stage-scoped: it serves only the cards of the open stage, and it
 reveals a card's tier and role only once that card has been placed. The
 concealed target and the answer to the open stage therefore never cross the
-wire early, even to a player reading the network traffic.
+wire early, even to a player reading the network traffic. Guided difficulty
+reveals the target deliberately, and only the target: the answer to the open
+stage stays concealed exactly as it is in expert play.
 """
 
 from __future__ import annotations
@@ -30,15 +32,22 @@ from phylogenomica.data.wikimedia_library import (
     load_wikimedia_library,
 )
 from phylogenomica.gameplay.engine import (
+    DEFAULT_DIFFICULTY,
+    DIFFICULTIES,
+    Difficulty,
     GameplayError,
     GameState,
     GuessOutcome,
     PlacedSpecies,
     apply_guess,
     best_achievable_score,
+    dealt_members,
     initial_state,
     maximum_score,
+    parse_difficulty,
+    revealed_target,
     score,
+    selectable_members,
     stage_at_stake,
 )
 from phylogenomica.generation.eligibility import (
@@ -74,6 +83,7 @@ class PrototypeSession:
     game: GeneratedGame
     state: GameState
     next_game: Callable[[GeneratedGame], GeneratedGame]
+    difficulty: Difficulty = DEFAULT_DIFFICULTY
     review_stage_index: int | None = None
 
     @classmethod
@@ -81,12 +91,31 @@ class PrototypeSession:
         cls,
         game: GeneratedGame,
         next_game: Callable[[GeneratedGame], GeneratedGame],
+        difficulty: Difficulty = DEFAULT_DIFFICULTY,
     ) -> PrototypeSession:
-        return cls(game=game, state=initial_state(game), next_game=next_game)
+        difficulty = parse_difficulty(difficulty)
+        return cls(
+            game=game,
+            state=initial_state(game, difficulty),
+            next_game=next_game,
+            difficulty=difficulty,
+        )
 
     def play_again(self) -> None:
         self.game = self.next_game(self.game)
-        self.state = initial_state(self.game)
+        self.state = initial_state(self.game, self.difficulty)
+        self.review_stage_index = None
+
+    def set_difficulty(self, difficulty: Difficulty) -> None:
+        """Restart the current target under another difficulty.
+
+        A difficulty decides which cards a stage deals, so it cannot change
+        under a position that was reached without them. Restarting the same
+        target rather than generating a new one keeps the switch instant and
+        lets a player retry a lineage they have just seen.
+        """
+        self.difficulty = parse_difficulty(difficulty)
+        self.state = initial_state(self.game, self.difficulty)
         self.review_stage_index = None
 
     def continue_stage(self) -> None:
@@ -115,8 +144,15 @@ def _card(
     member: GameMember,
     placed: PlacedSpecies | None,
     media_library: WikimediaLibrary | None,
+    *,
+    selectable: bool = True,
 ) -> dict[str, object]:
-    """Render one card, withholding the answer until the card is placed."""
+    """Render one card, withholding the answer until the card is placed.
+
+    A dealt but unselectable card is guided play's revealed target: its role is
+    what the player has been told, so it travels with the card rather than
+    waiting for a placement that only the end of the game will produce.
+    """
     card = member.card
     asset = (
         None if media_library is None else media_library.asset(member.species_id)
@@ -137,13 +173,17 @@ def _card(
             "source_url": asset.commons_page_url,
             "rights_url": asset.rights_url,
         }
-    if placed is None:
+    if placed is None and not selectable:
+        payload["state"] = "revealed"
+        payload["role"] = member.role
+    elif placed is None:
         payload["state"] = "active"
     else:
         # Tier and role are the answer, so they travel only after placement.
         payload["state"] = placed.placement
         payload["tier_index"] = placed.tier_index
         payload["role"] = placed.role
+    payload["selectable"] = selectable and payload["state"] == "active"
     return payload
 
 
@@ -151,8 +191,14 @@ def _lineage(
     game: GeneratedGame,
     state: GameState,
     final_visible_stage: int | None = None,
+    difficulty: Difficulty = DEFAULT_DIFFICULTY,
 ) -> list[dict[str, object]]:
-    """Render placed species into fixed anonymous slots, root to target."""
+    """Render placed species into fixed anonymous slots, root to target.
+
+    Slots reserve the geometry of the cards actually in play. A tier this
+    difficulty does not deal is not a slot the player can ever fill, so it is
+    left out of the tree rather than drawn as an unreachable blank.
+    """
     members = _members_by_id(game)
     placements: dict[tuple[int, int | None], list[PlacedSpecies]] = {}
     for placed in state.placements:
@@ -166,14 +212,24 @@ def _lineage(
         )
     lineage: list[dict[str, object]] = []
     for stage in game.stages[: final_visible_stage + 1]:
+        dealt_ids = {
+            member.species_id for member in dealt_members(stage, difficulty)
+        }
         rendered_tiers: list[dict[str, object]] = []
         for tier in stage.tiers:
+            dealt_slots = [
+                species_id
+                for species_id in tier.species_ids
+                if species_id in dealt_ids
+            ]
+            if not dealt_slots:
+                continue
             placed_at_tier = placements.get(
                 (stage.stage_index, tier.tier_index), []
             )
             placed_by_id = {placed.species_id: placed for placed in placed_at_tier}
             rendered_species: list[dict[str, object]] = []
-            for slot_index, species_id in enumerate(tier.species_ids):
+            for slot_index, species_id in enumerate(dealt_slots):
                 placed = placed_by_id.get(species_id)
                 if placed is None:
                     continue
@@ -196,7 +252,7 @@ def _lineage(
             rendered_tiers.append(
                 {
                     "tier_index": tier.tier_index,
-                    "slot_count": len(tier.species_ids),
+                    "slot_count": len(dealt_slots),
                     "age_ma": tier.age_ma,
                     "clade_name": tier.clade_name if populated else None,
                     "populated": populated,
@@ -233,6 +289,7 @@ def build_view(
     review_stage_index: int | None = None,
 ) -> dict[str, object]:
     """Render everything the page may know at this moment."""
+    difficulty = state.difficulty
     placed_by_id = {placed.species_id: placed for placed in state.placements}
     visible_stage_index = (
         review_stage_index
@@ -244,19 +301,30 @@ def build_view(
         if state.completed
         else game.stages[visible_stage_index]
     )
-    cards = (
-        []
-        if open_stage is None
-        else [
+    if open_stage is None:
+        cards: list[dict[str, object]] = []
+    else:
+        selectable_ids = {
+            member.species_id
+            for member in selectable_members(open_stage, difficulty)
+        }
+        cards = [
             _card(
                 member,
                 placed_by_id.get(member.species_id),
                 media_library,
+                selectable=member.species_id in selectable_ids,
             )
-            for member in open_stage.members
+            for member in dealt_members(open_stage, difficulty)
         ]
-    )
+    target = revealed_target(game, difficulty)
     return {
+        "difficulty": difficulty,
+        "target": (
+            None
+            if target is None
+            else _card(target, None, media_library, selectable=False)
+        ),
         "stage_index": visible_stage_index,
         "stage_count": len(game.stages),
         "is_ultimate": (
@@ -269,11 +337,11 @@ def build_view(
             0 if review_stage_index is not None else stage_at_stake(game, state)
         ),
         "best_achievable": best_achievable_score(game, state),
-        "maximum": maximum_score(game),
+        "maximum": maximum_score(game, difficulty),
         "stage_scores": list(state.stage_scores),
         "completed": state.completed,
         "reviewing_stage": review_stage_index is not None,
-        "lineage": _lineage(game, state, review_stage_index),
+        "lineage": _lineage(game, state, review_stage_index, difficulty),
     }
 
 
@@ -320,9 +388,13 @@ class _Handler(BaseHTTPRequestHandler):
             self._session.review_stage_index,
         )
         if self._media_downloader is not None:
+            target = view.get("target")
             view["media_download"] = self._media_downloader.player_status(
                 self._session.game,
                 int(view["stage_index"]),
+                also_shown=(
+                    () if target is None else (int(target["species_id"]),)  # type: ignore[index]
+                ),
             )
         return view
 
@@ -371,6 +443,24 @@ class _Handler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": "not found"})
 
     def do_POST(self) -> None:  # noqa: N802 - http.server API
+        if self.path == "/api/difficulty":
+            length = int(self.headers.get("Content-Length") or 0)
+            if length > MAX_REQUEST_BYTES:
+                self._send_json(413, {"error": "request too large"})
+                return
+            try:
+                request = json.loads(self.rfile.read(length) or b"{}")
+                difficulty = request["difficulty"]
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                self._send_json(400, {"error": "expected a difficulty"})
+                return
+            try:
+                self._session.set_difficulty(difficulty)
+            except GameplayError as error:
+                self._send_json(409, {"error": str(error)})
+                return
+            self._send_json(200, {"view": self._view()})
+            return
         if self.path == "/api/continue":
             try:
                 self._session.continue_stage()
@@ -444,11 +534,12 @@ def serve(
     media_downloader: BackgroundMediaDownloader | None = None,
     host: str = "127.0.0.1",
     port: int = 8000,
+    difficulty: Difficulty = DEFAULT_DIFFICULTY,
 ) -> ThreadingHTTPServer:
     """Return a bound server for a sequence of games, ready to serve."""
     httpd = _PrototypeHTTPServer((host, port), _Handler)
     httpd.session = PrototypeSession.start(  # type: ignore[attr-defined]
-        game, next_game
+        game, next_game, difficulty
     )
     httpd.media_library = media_library  # type: ignore[attr-defined]
     httpd.media_downloader = media_downloader
@@ -470,6 +561,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--seed", type=int, default=0, help="relative-selection seed (default: 0)"
+    )
+    parser.add_argument(
+        "--difficulty",
+        choices=DIFFICULTIES,
+        default=DEFAULT_DIFFICULTY,
+        help=(
+            "expert conceals the target and deals a mulligan; guided reveals "
+            f"the target and deals no mulligan (default: {DEFAULT_DIFFICULTY}). "
+            "Switchable in the page."
+        ),
     )
     parser.add_argument("--normalized-dir", type=Path, default=DEFAULT_NORMALIZED_DIR)
     parser.add_argument(
@@ -569,9 +670,11 @@ def _next_game_factory(
     return next_game
 
 
-def _startup_summary(game: GeneratedGame) -> str:
+def _startup_summary(
+    game: GeneratedGame, difficulty: Difficulty = DEFAULT_DIFFICULTY
+) -> str:
     """Describe the session without disclosing its concealed target."""
-    return f"game {game.game_id[:12]} - seed {game.seed}"
+    return f"game {game.game_id[:12]} - seed {game.seed} - {difficulty}"
 
 
 def _load_media_library(
@@ -633,11 +736,12 @@ def main(argv: Sequence[str] | None = None) -> None:
         media_downloader=media_downloader,
         host=args.host,
         port=args.port,
+        difficulty=args.difficulty,
     )
     url = f"http://{args.host}:{args.port}/"
     # The terminal is part of the player-visible surface. Do not disclose the
     # concealed target here, especially when it was selected randomly.
-    print(_startup_summary(game))
+    print(_startup_summary(game, args.difficulty))
     print(f"serving {url}  (ctrl-c to stop)")
     if args.open:
         webbrowser.open(url)

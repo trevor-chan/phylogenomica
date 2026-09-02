@@ -11,16 +11,22 @@ from phylogenomica.gameplay.engine import (
     GameState,
     apply_guess,
     best_achievable_score,
+    dealt_members,
     forfeited_score,
     initial_state,
     main,
     maximum_score,
+    parse_difficulty,
     perfect_guesses,
     replay,
     restore_state,
+    revealed_target,
     score,
+    selectable_members,
     stage_at_stake,
+    stage_ending_ids,
     stage_maximum,
+    target_is_revealed,
     validate_state,
 )
 from phylogenomica.generation.feasibility import FeasibilityConfig
@@ -331,6 +337,134 @@ def test_advances_stages_and_completes_the_game() -> None:
     assert state.completed
     assert state.active_species_ids == ()
     assert state.current_stage_index == len(game.stages)
+
+
+def test_guided_play_deals_every_card_but_the_mulligan() -> None:
+    game = _documented_game()
+    transition, ultimate = game.stages
+
+    dealt = {member.species_id for member in dealt_members(transition, "guided")}
+    selectable = {
+        member.species_id for member in selectable_members(transition, "guided")
+    }
+
+    # The mulligan exists to make the second-deepest relative tempting, which a
+    # revealed target settles outright.
+    assert dealt == selectable == {A, B, C, D, E, F, H}
+    assert G not in dealt
+    assert stage_ending_ids(transition, "guided") == {H}
+    # Expert play is untouched: one generated game serves both difficulties.
+    assert {m.species_id for m in dealt_members(transition)} == {
+        member.species_id for member in transition.members
+    }
+    assert stage_ending_ids(transition) == {H}
+    assert stage_ending_ids(ultimate) == {TARGET}
+
+
+def test_guided_ultimate_stage_shows_the_target_but_never_offers_it() -> None:
+    game = _documented_game()
+    ultimate = game.stages[1]
+
+    dealt = {member.species_id for member in dealt_members(ultimate, "guided")}
+    selectable = {
+        member.species_id for member in selectable_members(ultimate, "guided")
+    }
+
+    # With no unlock to find, the deepest relative is the closest relative and
+    # ends the game; the target is dealt only so the player can see it.
+    assert TARGET in dealt
+    assert selectable == dealt - {TARGET}
+    assert 15 in selectable
+    assert stage_ending_ids(ultimate, "guided") == {15}
+    assert revealed_target(game, "guided").species_id == TARGET
+    assert revealed_target(game) is None
+    assert target_is_revealed("guided") and not target_is_revealed("expert")
+
+
+def test_guided_play_scores_one_choice_per_card_it_offers() -> None:
+    game = _documented_game()
+
+    state, outcomes = replay(game, perfect_guesses(game, "guided"), "guided")
+
+    # Seven choices per stage rather than expert's eight: no mulligan is dealt,
+    # and the target the ultimate stage shows cannot be chosen.
+    assert stage_maximum(game, "guided") == 7
+    assert stage_maximum(game) == 8
+    assert score(game, state) == maximum_score(game, "guided") == 14
+    assert state.stage_scores == (7, 7)
+    assert state.completed
+    assert perfect_guesses(game, "guided") == (H, 15)
+
+
+def test_guided_play_charges_decoys_exactly_as_expert_play_does() -> None:
+    game = _documented_game()
+
+    _, outcomes = replay(game, [B, C, F, H], "guided")
+
+    assert [(o.penalty, o.bonus) for o in outcomes] == [
+        (2, 0),  # B exposes A
+        (1, 0),  # C exposes nothing; D and E share its tier
+        (3, 0),  # F exposes D and E
+        (0, 0),  # the closest relative ends the stage for free
+    ]
+    assert outcomes[-1].stage_score == 1
+    # G is never dealt, so no guess of it is ever charged or revealed.
+    assert all(
+        G not in {placed.species_id for placed in outcome.placed}
+        for outcome in outcomes
+    )
+
+
+def test_guided_play_places_the_revealed_target_as_the_endpoint() -> None:
+    game = _documented_game()
+
+    state, outcomes = replay(game, [H, 15], "guided")
+
+    by_id = {placed.species_id: placed for placed in state.placements}
+    assert state.completed
+    assert by_id[TARGET].placement == "revealed"
+    assert by_id[TARGET].role == "target"
+    assert by_id[TARGET].tier_index is None
+    # The closing guess resolves the stage, so the target lands last, deepest.
+    assert outcomes[-1].placed[-1].species_id == TARGET
+    assert G not in by_id and 15 in by_id
+
+
+def test_guided_play_rejects_the_target_and_the_undealt_mulligan() -> None:
+    game = _documented_game()
+    state = initial_state(game, "guided")
+
+    with pytest.raises(GameplayError, match="not in the active stage"):
+        apply_guess(game, state, G)
+
+    state, _ = apply_guess(game, state, H)
+    with pytest.raises(GameplayError, match="revealed target and cannot be chosen"):
+        apply_guess(game, state, TARGET)
+    # Expert play still ends on the target it has just shown.
+    expert, _ = apply_guess(game, initial_state(game), H)
+    _, final = apply_guess(game, expert, TARGET)
+    assert final.game_completed
+
+
+def test_state_carries_the_difficulty_it_is_played_under() -> None:
+    game = _documented_game()
+    state, _ = replay(game, [B, H], "guided")
+
+    restored = restore_state(game, json.loads(json.dumps(state.to_dict())))
+
+    assert restored == state
+    assert restored.difficulty == "guided"
+    validate_state(game, restored)
+    # Each difficulty deals its own cards, so a state relabelled as the other
+    # one no longer accounts for the stage it claims to be playing.
+    with pytest.raises(GameplayError, match="do not cover the stage"):
+        validate_state(game, replace(state, difficulty="expert"))
+    with pytest.raises(GameplayError, match="unknown difficulty"):
+        parse_difficulty("easy")
+    with pytest.raises(GameplayError, match="unknown difficulty"):
+        restore_state(
+            game, {**json.loads(json.dumps(state.to_dict())), "difficulty": "easy"}
+        )
 
 
 def test_rejects_invalid_guesses() -> None:

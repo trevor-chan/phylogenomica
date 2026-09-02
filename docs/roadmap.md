@@ -103,6 +103,16 @@ stage receives most of the viewport. Game schema version 3 carries both
 `age_ma` and optional `clade_name` on every tier; the generator version moved
 to 3 with it, so earlier games are refused on load and must be regenerated.
 
+One generated game now plays at two difficulties. Expert is the mode described
+throughout `docs/game_design.md`. Guided reveals the target from the opening
+stage, deals no mulligan, and asks for the closest relative in every stage
+including the last, where the revealed target is dealt but not selectable. The
+split lives entirely in the gameplay engine — generation, topology, and seeds
+are untouched, so both modes draw from one lineage — and gameplay engine
+version moved to 2 because player state now records the difficulty it is being
+played under. Guided stages offer one fewer choice than expert stages, so
+scores compare within a difficulty rather than across the two.
+
 The next implementation sequence is:
 
 1. resolve and cache licensed media so cards can show images again; and

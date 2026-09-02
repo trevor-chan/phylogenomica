@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from threading import Condition, Thread
 from typing import Any, Literal
@@ -114,9 +114,17 @@ class BackgroundMediaDownloader:
             return self._state
 
     def player_status(
-        self, game: GeneratedGame, current_stage_index: int
+        self,
+        game: GeneratedGame,
+        current_stage_index: int,
+        also_shown: Sequence[int] = (),
     ) -> dict[str, object]:
-        """Return stage-scoped progress without exposing future species IDs."""
+        """Return stage-scoped progress without exposing future species IDs.
+
+        ``also_shown`` counts species the page displays outside the open stage,
+        such as the target guided difficulty reveals from the start. Only a
+        species the player can already see belongs here.
+        """
         with self._condition:
             library = self._library
             state: MediaState = (
@@ -127,11 +135,12 @@ class BackgroundMediaDownloader:
             revision = self._revision
             failed = state == "error"
         if current_stage_index >= len(game.stages):
-            stage_ids: tuple[int, ...] = ()
+            members: tuple[int, ...] = ()
         else:
-            stage_ids = tuple(
+            members = tuple(
                 member.species_id for member in game.stages[current_stage_index].members
             )
+        stage_ids = tuple(dict.fromkeys((*members, *also_shown)))
         available = sum(
             library is not None and library.asset(species_id) is not None
             for species_id in stage_ids

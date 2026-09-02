@@ -48,9 +48,11 @@ ordered relative roles across a polytomy.
 
 ### Target visibility is stage-scoped
 
-The target is the concealed endpoint during the first `M - 1` stages. In the
-ultimate stage it is shown as a normal card with its image and names, occupies
-the terminal selectable position, and ends the game when clicked.
+In expert difficulty the target is the concealed endpoint during the first
+`M - 1` stages. In the ultimate stage it is shown as a normal card with its
+image and names, occupies the terminal selectable position, and ends the game
+when clicked. Guided difficulty reveals it from the opening stage instead; see
+[Difficulty](#difficulty).
 
 ### One continuous tree is constructed
 
@@ -289,7 +291,41 @@ Choose H: complete the stage.
 ```
 
 Reveal behavior must never remove a species that could still be deeper than the
-player's guess. Clicking the visible target resolves the ultimate stage.
+player's guess. In expert difficulty, clicking the visible target resolves the
+ultimate stage; in guided difficulty the closest relative resolves it and the
+target is not selectable.
+
+## Difficulty
+
+One generated game is playable at two difficulties. A difficulty decides which
+of a stage's generated cards are dealt, which of those the player may choose,
+and which one ends the stage. It never changes the lineage, the tiers, or the
+selection, so one seed produces one topology in both modes and the sections
+above describe the shape both are drawn from.
+
+**Expert** is the mode the rest of this document describes: the target is
+concealed until the ultimate stage, every stage deals a mulligan, and clicking
+the revealed target ends the game.
+
+**Guided** reveals the target — image and names — from the opening stage.
+Naming the closest relative is then the whole task, which changes two things:
+
+- No mulligan is dealt. It exists to make the second-deepest relative tempting,
+  and a visible target settles that comparison outright. The one exception is
+  the ultimate stage, whose deepest relative is generated as its mulligan; that
+  card is dealt because it is the closest relative there.
+- The ultimate stage deals the target as an ordinary-looking card that cannot
+  be chosen. The task is unchanged from every other stage: name the closest
+  relative. Choosing it completes the game and places the target as the
+  endpoint it was already known to be.
+
+Guided play therefore offers one fewer choice per stage than expert play of the
+same configuration, and a stage is worth one point per card it offers. Scores
+are comparable within a difficulty, not across them.
+
+Guided difficulty does not weaken any correctness rule. The engine still
+resolves every guess, the answer to the open stage is still withheld until it
+is placed, and the target is the only thing the mode reveals early.
 
 ## Scoring
 

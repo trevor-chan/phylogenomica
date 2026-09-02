@@ -73,13 +73,22 @@ Owns active relatives, guesses, reveals, scoring, stage transitions, game
 completion, and serializable player state. It operates on an already validated
 game and does not query upstream databases.
 
-Gameplay engine version 1 is a pure transition function over immutable state:
+Gameplay engine version 2 is a pure transition function over immutable state:
 `apply_guess(game, state, species_id)` returns the next `GameState` and a
 `GuessOutcome` carrying every placement, the remaining relatives, the cost and
 bonus, banked score, the open stage's standing value, and completion flags. The
 engine does not revalidate the game; it consumes one already checked by
 `validate_game_structure`. `restore_state` rebuilds player state and confirms
 it is a reachable position in that specific game.
+
+The engine also owns difficulty. `dealt_members`, `selectable_members`,
+`stage_ending_ids`, and `revealed_target` derive a stage's cards, its choices,
+its stage-ending card, and any revealed target from the difficulty a state
+records; `stage_maximum` derives that stage's points from the choices it
+offers. Generation is untouched by difficulty: one generated game serves both
+modes, so a seed produces one topology and switching modes cannot change what
+is true about the lineage. Player state carries its own difficulty, and a state
+relabelled as the other mode fails validation rather than being reinterpreted.
 
 ### `phylogenomica.prototype`
 
@@ -132,7 +141,9 @@ left to right: tiers are nested branching events, while every species is a
 terminal leaf on one right-hand boundary. A tier with several relatives is one
 rake/polytomy rather than a sequence of invented splits. The server exposes the
 current stage's topology as anonymous fixed slots, withholding the identity,
-role, and clade label of each unpopulated slot. Divergence age describes the
+role, and clade label of each unpopulated slot. Slots reserve only the geometry
+of the cards the difficulty deals, so a tier that is not in play is absent
+rather than drawn as an unfillable blank. Divergence age describes the
 branching event rather than any card, so it labels a tier from stage opening;
 an age on an event with no placed species renders as a provisional label. Placements carry a stable
 within-tier slot index, so existing leaves never move when another card is
@@ -148,6 +159,13 @@ from revealed, a hollow internal node marks a polytomy, and a dashed terminal
 branch marks the concealed continuation. Open-stage cards stay in fixed tray
 positions and dimensions after placement. Anonymous geometry cannot leak the
 card-to-tier answer, and the frontend never reconstructs correctness.
+
+The page renders the difficulty rather than deciding it. Each card arrives with
+a `selectable` flag the page obeys, guided play's revealed target arrives as a
+pinned tray card and names the tree's endpoint, and `POST /api/difficulty`
+restarts the current target under the other mode — a difficulty decides which
+cards a stage deals, so an in-progress position cannot be reinterpreted under
+one it was not reached with.
 
 Developer scripts in `scripts/` call these modules but contain no reusable
 business logic. A future API and frontend should be separate layers rather than
@@ -503,7 +521,8 @@ Every generated stage requires automated checks:
   tier.
 - **Polytomy:** relatives sharing a tier share the relevant divergence event.
 - **Target visibility:** the target is absent from transition stages and occurs
-  exactly once as a normal selectable card in the ultimate stage.
+  exactly once as a normal card in the ultimate stage. Whether that card can be
+  chosen is a difficulty rule the engine applies, not a generation rule.
 - **Duplicates:** a species is not reused unless configuration explicitly
   permits it.
 - **Continuity:** successive stages descend along one target-containing lineage,

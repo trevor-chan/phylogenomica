@@ -40,6 +40,19 @@
     color: var(--muted); font-size: .72rem; letter-spacing: .02em;
     white-space: nowrap;
   }
+  .difficulty {
+    display: flex; gap: .15rem; padding: .15rem;
+    border: 1px solid var(--line); border-radius: .4rem; background: var(--bg);
+  }
+  .difficulty button {
+    border: 0; background: transparent; color: var(--muted); font: inherit;
+    font-size: .72rem; letter-spacing: .05em; text-transform: uppercase;
+    padding: .22rem .55rem; border-radius: .28rem; cursor: pointer;
+  }
+  .difficulty button:hover { color: var(--ink); }
+  .difficulty button[aria-pressed="true"] {
+    background: var(--panel); color: var(--accent); font-weight: 700;
+  }
   .stats { display: flex; gap: 1.4rem; margin-left: auto; }
   .stat { text-align: right; }
   .stat b { display: block; font-size: 1.2rem; font-variant-numeric: tabular-nums; line-height: 1.1; }
@@ -85,9 +98,23 @@
   }
   #feedback.good { border-color: var(--good); }
   #feedback.cost { border-color: var(--warn); }
+  /* The revealed target is pinned outside the scrolling tray: it is the
+     question, not one of the answers, and must stay on screen. */
+  .tray { display: flex; gap: .6rem; align-items: stretch; min-width: 0; }
   #cards {
-    display: flex; gap: .5rem; align-items: stretch;
-    overflow-x: auto; padding-bottom: .2rem;
+    display: flex; gap: .5rem; align-items: stretch; flex: 1 1 auto;
+    min-width: 0; overflow-x: auto; padding-bottom: .2rem;
+  }
+  #target-panel {
+    flex: 0 0 auto; display: flex; gap: .5rem; align-items: stretch;
+    padding-right: .6rem; border-right: 1px solid var(--line);
+  }
+  #target-panel .card { border-color: var(--good); background: var(--panel); }
+  #target-panel .card:hover { transform: none; border-color: var(--good); }
+  .tray-label {
+    writing-mode: vertical-rl; transform: rotate(180deg);
+    font-size: .6rem; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--good); font-weight: 700; text-align: center;
   }
   .card {
     flex: 1 0 8.25rem; min-width: 8.25rem; max-width: 12rem;
@@ -105,6 +132,9 @@
   .card.guessed .thumb img, .card.revealed .thumb img {
     filter: grayscale(1) contrast(.65); opacity: .38;
   }
+  /* A card the player was never allowed to spend is not a spent card. */
+  .card.shown, .card.shown .thumb img { filter: none; opacity: 1; }
+  .card.shown { border-color: var(--good); color: inherit; }
   .thumb {
     flex: 0 0 auto; width: 100%; aspect-ratio: 4 / 3;
     position: relative; border-radius: .3rem; overflow: hidden;
@@ -118,6 +148,7 @@
     font-size: .58rem; font-weight: 700; letter-spacing: .08em;
     text-align: center; text-transform: uppercase;
   }
+  .state-badge.target { background: rgba(31, 138, 85, .92); color: #f2fff8; }
   .en { font-weight: 600; font-size: .85rem; line-height: 1.2; }
   .sci { font-style: italic; color: var(--muted); font-size: .74rem; line-height: 1.2; }
   .credit { color: var(--muted); font-size: .62rem; line-height: 1.2; }
@@ -139,6 +170,14 @@
 <header>
   <h1>Phylogenomica <span id="stage"></span></h1>
   <span id="media-status" class="media-status" hidden></span>
+  <div class="difficulty" role="group" aria-label="Difficulty">
+    <button type="button" data-difficulty="expert" aria-pressed="true"
+      title="The target stays hidden until the last stage, and every stage deals a mulligan">
+      Expert</button>
+    <button type="button" data-difficulty="guided" aria-pressed="false"
+      title="The target is shown from the start; name its closest relative each stage">
+      Guided</button>
+  </div>
   <div class="stats">
     <div class="stat"><b id="score">0</b><small>banked</small></div>
     <div class="stat"><b id="stake">0</b><small>at stake</small></div>
@@ -165,7 +204,10 @@
 
 <footer>
   <p id="feedback">Pick the card whose most recent common ancestor with the hidden target is the newest.</p>
-  <div id="cards"></div>
+  <div class="tray">
+    <div id="target-panel" hidden></div>
+    <div id="cards"></div>
+  </div>
 </footer>
 
 <script>
@@ -406,6 +448,19 @@ function renderTree(view) {
       cx: leafX, cy: endpoint.y, r: 6, class: "tip target guessed",
     }));
     appendLeafLabel(svg, leafX, endpoint.y, target);
+  } else if (view.target) {
+    // Guided play knows where the lineage ends from the first stage. The
+    // endpoint is named, but the branch reaching it stays dashed until the
+    // relatives between here and there are placed.
+    svg.appendChild(el("circle", {
+      cx: leafX, cy: endpoint.y, r: 6, class: "tip target pending",
+    }));
+    appendLeafLabel(svg, leafX, endpoint.y, {
+      english_name: view.target.english_name,
+      scientific_name: view.target.scientific_name,
+      role: "target",
+      placement: "revealed",
+    });
   } else {
     svg.appendChild(el("circle", {
       cx: leafX, cy: endpoint.y, r: 5, class: "tip unknown-tip",
@@ -454,6 +509,8 @@ function styleBlock() {
     .tip { fill: var(--bg); stroke: var(--faint); stroke-width: 2; }
     .tip.guessed { fill: var(--accent); stroke: var(--accent); }
     .tip.target { fill: var(--good); stroke: var(--good); }
+    /* Named but not yet reached: the endpoint is known, the path is not. */
+    .tip.target.pending { fill: var(--bg); stroke-dasharray: 3 2; }
     .tip.unknown-tip { fill: var(--bg); stroke-dasharray: 2 2; }
     .history-hit { fill: transparent; stroke: none; }
     .stage-bracket { stroke: var(--line); stroke-width: 1.2; }
@@ -490,8 +547,14 @@ function applyScale() {
 
 function cardNode(card) {
   const node = document.createElement("button");
-  node.className = `card ${card.state}`;
-  node.disabled = card.state !== "active" || busy;
+  // A dealt card the server marks unselectable is guided play's revealed
+  // target: shown in full colour, but never a choice.
+  const shown = !card.selectable && card.state === "revealed" && card.role === "target";
+  node.className = `card ${card.state}${shown ? " shown" : ""}`;
+  // `busy` is deliberately not consulted here. Every click handler already
+  // returns early while a request is in flight, and a render that ran during
+  // one would otherwise leave permanently disabled cards behind.
+  node.disabled = !card.selectable;
 
   const thumb = document.createElement("div");
   thumb.className = "thumb";
@@ -507,8 +570,9 @@ function cardNode(card) {
   }
   if (card.state !== "active") {
     const badge = document.createElement("div");
-    badge.className = "state-badge";
-    badge.textContent = card.state;
+    const isTarget = card.role === "target";
+    badge.className = `state-badge${isTarget ? " target" : ""}`;
+    badge.textContent = isTarget ? "target" : card.state;
     thumb.appendChild(badge);
   }
 
@@ -531,12 +595,42 @@ function cardNode(card) {
   node.append(thumb, meta);
   node.title = `${card.english_name} — ${card.scientific_name}` +
     (card.image_attribution ? `\n\n${card.image_attribution.text}` : "");
-  if (card.state === "active") node.onclick = () => guess(card.species_id);
+  if (card.selectable) node.onclick = () => guess(card.species_id);
   return node;
+}
+
+// The target panel is the question guided play puts on screen. It stays put
+// through every stage, so the player always sees what they are placing
+// relatives against.
+function renderTargetPanel(view) {
+  const panel = $("target-panel");
+  panel.innerHTML = "";
+  panel.hidden = !view.target;
+  if (!view.target) return;
+  const label = document.createElement("div");
+  label.className = "tray-label";
+  label.textContent = "target";
+  panel.append(label, cardNode(view.target));
+}
+
+function renderDifficulty(view) {
+  for (const button of document.querySelectorAll(".difficulty button")) {
+    button.setAttribute(
+      "aria-pressed", String(button.dataset.difficulty === view.difficulty),
+    );
+  }
+}
+
+function openingPrompt(view) {
+  return view.difficulty === "guided"
+    ? "Pick the card whose most recent common ancestor with the target is the newest."
+    : "Pick the card whose most recent common ancestor with the hidden target is the newest.";
 }
 
 function render(view, outcome) {
   currentView = view;
+  renderDifficulty(view);
+  renderTargetPanel(view);
   $("score").textContent = view.score;
   $("stake").textContent = view.stage_at_stake;
   $("best").textContent = `${view.best_achievable}/${view.maximum}`;
@@ -640,7 +734,12 @@ function describe(outcome, view) {
   const revealed = outcome.placed.filter((p) => p.placement === "revealed").length;
   if (outcome.game_completed) {
     box.classList.add("good");
-    box.textContent = `That was the target. Final score ${view.score} of ${view.maximum}.`;
+    // Guided play ends on the closest relative; expert play ends on the target.
+    box.textContent =
+      (outcome.role === "target"
+        ? "That was the target. "
+        : "Correct — the closest relative to the target. ") +
+      `Final score ${view.score} of ${view.maximum}.`;
   } else if (outcome.stage_completed) {
     box.classList.add("good");
     box.textContent =
@@ -673,7 +772,6 @@ async function guess(speciesId) {
     });
     const data = await res.json();
     if (!res.ok) { $("feedback").textContent = data.error; return; }
-    busy = false;
     render(data.view, data.outcome);
   } finally {
     busy = false;
@@ -692,7 +790,39 @@ async function playAgain() {
     $("follow").setAttribute("aria-pressed", "true");
     render(data.view);
     $("feedback").className = "";
-    $("feedback").textContent = "New game.";
+    $("feedback").textContent = `New game. ${openingPrompt(data.view)}`;
+  } finally {
+    busy = false;
+  }
+}
+
+function inProgress(view) {
+  return view.completed || view.lineage.some(
+    (stage) => stage.tiers.some((tier) => tier.species.length),
+  );
+}
+
+async function setDifficulty(difficulty) {
+  if (busy || !currentView || difficulty === currentView.difficulty) return;
+  // A difficulty decides which cards a stage deals, so the switch restarts
+  // this target rather than reinterpreting a position reached without them.
+  if (inProgress(currentView) &&
+      !confirm("Switching difficulty restarts this target. Continue?")) return;
+  busy = true;
+  try {
+    const res = await fetch("/api/difficulty", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ difficulty }),
+    });
+    const data = await res.json();
+    if (!res.ok) { $("feedback").textContent = data.error; return; }
+    scale = 1;
+    follow = true;
+    $("follow").setAttribute("aria-pressed", "true");
+    render(data.view);
+    $("feedback").className = "";
+    $("feedback").textContent = openingPrompt(data.view);
   } finally {
     busy = false;
   }
@@ -711,6 +841,10 @@ async function continueStage() {
   } finally {
     busy = false;
   }
+}
+
+for (const button of document.querySelectorAll(".difficulty button")) {
+  button.onclick = () => setDifficulty(button.dataset.difficulty);
 }
 
 $("zoom-in").onclick = () => { scale = Math.min(2, scale + 0.15); applyScale(); };
@@ -738,7 +872,10 @@ window.addEventListener("resize", () => {
   }, 100);
 });
 
-fetch("/api/view").then((r) => r.json()).then(render);
+fetch("/api/view").then((r) => r.json()).then((view) => {
+  render(view);
+  $("feedback").textContent = openingPrompt(view);
+});
 </script>
 </body>
 </html>
