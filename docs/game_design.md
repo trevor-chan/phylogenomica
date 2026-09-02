@@ -347,8 +347,10 @@ The prototype encodes each distinction with a separate visual channel, so none
 of them has to be inferred from another: stroke style carries resolved versus
 unresolved, tip fill carries inferred versus revealed, and a polytomy is a rake
 from one trunk node rather than a nested sequence. At stage opening it draws
-the complete geometry as anonymous empty leaf slots. It sends no unplaced
-species-to-slot mapping, role, clade name, or divergence age. Placements fill
+the complete geometry as anonymous empty leaf slots, each branching event
+labelled with its divergence age so the player can read the clade's shape in
+time before any card identifies it. It sends no unplaced species-to-slot
+mapping, role, or clade name. Placements fill
 stable slots without reflow, so the board remains trackable without disclosing
 the open stage's answer.
 

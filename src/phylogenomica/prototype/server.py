@@ -188,15 +188,18 @@ def _lineage(
                         "slot_index": slot_index,
                     }
                 )
-            # Geometry is safe to reveal, but labels remain hidden until a
-            # species has actually populated the corresponding branching event.
+            # Geometry and divergence age describe the branching event itself,
+            # so both travel from stage opening: the age teaches the shape of
+            # the clade without naming it. The clade name is the answer in
+            # words and stays hidden until a species populates the event.
             populated = bool(rendered_species)
             rendered_tiers.append(
                 {
                     "tier_index": tier.tier_index,
                     "slot_count": len(tier.species_ids),
-                    "age_ma": tier.age_ma if populated else None,
+                    "age_ma": tier.age_ma,
                     "clade_name": tier.clade_name if populated else None,
+                    "populated": populated,
                     "species": rendered_species,
                 }
             )

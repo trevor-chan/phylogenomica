@@ -132,14 +132,16 @@ left to right: tiers are nested branching events, while every species is a
 terminal leaf on one right-hand boundary. A tier with several relatives is one
 rake/polytomy rather than a sequence of invented splits. The server exposes the
 current stage's topology as anonymous fixed slots, withholding the identity,
-role, clade label, and age of each unpopulated slot. Placements carry a stable
+role, and clade label of each unpopulated slot. Divergence age describes the
+branching event rather than any card, so it labels a tier from stage opening;
+an age on an event with no placed species renders as a provisional label. Placements carry a stable
 within-tier slot index, so existing leaves never move when another card is
 placed. Completed stages use moderately compact horizontal bands and
 tooltip-labelled leaves; the current stage receives the remaining width and
 height plus readable species labels.
 The SVG dimensions follow the board viewport, so normal play remains within a
-single screen rather than growing with the lineage. Optional clade names and
-divergence ages label current-stage internal nodes but never affect layout or
+single screen rather than growing with the lineage. Optional clade names and divergence
+ages label current-stage internal nodes but never affect layout or
 correctness. Cards for the open stage occupy a separate row beneath the board.
 Stroke style separates resolved from unresolved, tip fill separates inferred
 from revealed, a hollow internal node marks a polytomy, and a dashed terminal

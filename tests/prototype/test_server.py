@@ -169,9 +169,11 @@ def test_reserves_anonymous_stage_slots_before_any_species_is_placed() -> None:
     assert len(tiers) == 3
     assert [tier["slot_count"] for tier in tiers] == [1, 1, 1]
     assert all(tier["species"] == [] for tier in tiers)
-    # Clade and age can identify a card through outside knowledge, so only the
-    # anonymous geometry crosses the wire until its first species is placed.
-    assert all(tier["age_ma"] is None for tier in tiers)
+    # The divergence age labels the empty branching event so the player can
+    # read the clade's shape in time, but the clade name is the answer in
+    # words and waits until its first species is placed.
+    assert [tier["age_ma"] for tier in tiers] == [500.0, 490.0, 480.0]
+    assert all(tier["populated"] is False for tier in tiers)
     assert all(tier["clade_name"] is None for tier in tiers)
 
     state, _ = replay(game, [DECOY_A])
@@ -747,6 +749,19 @@ def test_reports_divergence_ages_on_placed_tiers() -> None:
     ]
     ages = [t["age_ma"] for t in tiers]
     assert ages == sorted(ages, reverse=True)
+
+
+def test_dates_an_empty_branching_event_without_naming_it() -> None:
+    game = _game()
+    state, _ = replay(game, [DECOY_A])
+
+    tiers = build_view(game, state)["lineage"][0]["tiers"]
+
+    assert [(t["age_ma"], t["clade_name"], t["populated"]) for t in tiers] == [
+        (500.0, "Clade 0", True),
+        (490.0, None, False),
+        (480.0, None, False),
+    ]
 
 
 def test_reports_clade_names_on_placed_tiers() -> None:

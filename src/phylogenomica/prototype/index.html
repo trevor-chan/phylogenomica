@@ -211,6 +211,9 @@ function columns(view) {
       cols.push({
         stage: stage.stage_index, tier: tier.tier_index,
         age: tier.age_ma, clade: tier.clade_name, species: tier.species,
+        populated: tier.populated !== undefined
+          ? tier.populated
+          : tier.species.length > 0,
         slotCount: Number.isInteger(tier.slot_count)
           ? tier.slot_count
           : tier.species.length,
@@ -350,9 +353,14 @@ function renderTree(view) {
     if (labelParts.length) {
       const fullLabel = labelParts.join(" · ");
       branchNode.appendChild(el("title")).textContent = fullLabel;
+      // An age on an empty event is dated but unidentified: keep it visibly
+      // provisional so it never reads as a placed relative's own label.
+      const classes = ["tierlabel"];
+      if (tier.stage < focusStage) classes.push("history");
+      if (!tier.populated) classes.push("pending");
       const labelNode = text(
         tier.x + 7, tier.nodeY - 7, fit(fullLabel, 180, 5.8),
-        tier.stage < focusStage ? "tierlabel history" : "tierlabel",
+        classes.join(" "),
       );
       labelNode.appendChild(el("title")).textContent = fullLabel;
       svg.appendChild(labelNode);
@@ -457,6 +465,7 @@ function styleBlock() {
     .sci { font-size: 10px; font-style: italic; fill: var(--muted); }
     .tierlabel, .stagelabel { font-size: 9.5px; fill: var(--muted); letter-spacing: .04em; }
     .tierlabel.history { display: none; }
+    .tierlabel.pending { fill: var(--faint); font-style: italic; }
     .stagelabel.active { fill: var(--accent); font-weight: 700; }
     .unknown { font-size: 15px; fill: var(--muted); font-style: italic; }
     /* Zoomed far out, labels are unreadable noise: show structure instead. */
