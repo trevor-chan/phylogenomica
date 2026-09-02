@@ -3,6 +3,8 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from phylogenomica.data.wikimedia_rights import (
     classify_rights,
     evaluate_wikimedia_rights,
@@ -108,3 +110,51 @@ def test_writes_pinned_rights_manifest_with_policy_counts(tmp_path: Path) -> Non
     assert manifest["records"][0]["attribution_text"].startswith(
         '"File:Species-1.jpg" by Example creator'
     )
+
+
+@pytest.mark.parametrize(
+    ("label", "identifier", "url"),
+    [
+        ("CC BY 3.0 us", "CC-BY-3.0-US",
+         "https://creativecommons.org/licenses/by/3.0/us/"),
+        ("CC BY-SA 2.0 fr", "CC-BY-SA-2.0-FR",
+         "https://creativecommons.org/licenses/by-sa/2.0/fr/"),
+        ("CC BY 2.5 au", "CC-BY-2.5-AU",
+         "https://creativecommons.org/licenses/by/2.5/au/"),
+        ("CC BY-SA 1.0", "CC-BY-SA-1.0",
+         "https://creativecommons.org/licenses/by-sa/1.0/"),
+    ],
+)
+def test_accepts_jurisdiction_ported_creative_commons_labels(
+    label: str, identifier: str, url: str
+) -> None:
+    rights = classify_rights(
+        {
+            "license_name": label,
+            "creator": "Jane Doe",
+            "commons_page_url": "https://commons.example/File:X.jpg",
+            "commons_title": "File:X.jpg",
+            "transformation": "none",
+        }
+    )
+
+    # A port is the same licence under a national adaptation, carrying the
+    # same obligations, so it is classified rather than left unrecognized.
+    assert rights["identifier"] == identifier
+    assert rights["rights_url"] == url
+    assert rights["promotion_status"] == "ready"
+    assert rights["working_use_allowed"] is True
+
+
+def test_still_blocks_a_label_that_is_not_a_creative_commons_licence() -> None:
+    for label in ("GPL", "CC BY 9.9", "Nonsense", "CC XX 3.0 us"):
+        rights = classify_rights(
+            {
+                "license_name": label,
+                "creator": "Jane Doe",
+                "commons_page_url": "https://commons.example/File:X.jpg",
+                "commons_title": "File:X.jpg",
+                "transformation": "none",
+            }
+        )
+        assert rights["working_use_allowed"] is False, label

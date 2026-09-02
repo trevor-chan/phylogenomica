@@ -8,14 +8,16 @@ import pytest
 
 from phylogenomica.data.cards import CardImage, MetadataSource, SpeciesCard
 from phylogenomica.data.wikimedia import (
-    COMMONS_API_URL,
     WIKIDATA_API_URL,
     WikimediaResolutionError,
-    _commons_media,
-    _fetch_json_curl,
-    _p18_candidates,
+)
+from phylogenomica.data.wikipedia import (
+    MAX_EXTRACT_CHARACTERS,
+    WIKIPEDIA_API_URL,
+    WikipediaResolutionError,
+    _trim_extract,
     main,
-    resolve_game_wikimedia,
+    resolve_game_wikipedia,
 )
 from phylogenomica.generation.feasibility import FeasibilityConfig
 from phylogenomica.generation.game import (
@@ -59,8 +61,8 @@ def _member(species_id: int, role: str, tier: int | None) -> GameMember:
 def _game() -> GeneratedGame:
     return GeneratedGame(
         schema_version=GAME_SCHEMA_VERSION,
-        game_id="a" * 64,
-        dataset_version="test-wikimedia-1",
+        game_id="b" * 64,
+        dataset_version="test-wikipedia-1",
         generator_version=GAME_GENERATOR_VERSION,
         selector_version=1,
         eligibility_index_version=1,
@@ -100,7 +102,7 @@ def _game() -> GeneratedGame:
     )
 
 
-def _write_database(path: Path, *, dataset_version: str = "test-wikimedia-1") -> None:
+def _write_database(path: Path, *, dataset_version: str = "test-wikipedia-1") -> None:
     connection = sqlite3.connect(path)
     connection.executescript(
         """
@@ -132,116 +134,62 @@ def _write_database(path: Path, *, dataset_version: str = "test-wikimedia-1") ->
     connection.close()
 
 
-def _p18(filename: str, *, rank: str = "normal") -> dict[str, object]:
+def _article(title: str, extract: str, *, page_id: int = 10) -> dict[str, object]:
     return {
-        "rank": rank,
-        "mainsnak": {
-            "snaktype": "value",
-            "datavalue": {"type": "string", "value": filename},
-        },
+        "pageid": page_id,
+        "lastrevid": 5000 + page_id,
+        "title": title,
+        "extract": extract,
+        "fullurl": f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}",
+        "canonicalurl": f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}",
     }
 
 
-def _image_page(
-    filename: str, *, artist: str | None, license_name: str = "CC BY-SA 4.0"
-) -> dict[str, object]:
-    extmetadata: dict[str, object] = {
-        "Credit": {"value": "Own work"},
-        "LicenseShortName": {"value": license_name},
-        "LicenseUrl": {"value": "https://creativecommons.org/licenses/by-sa/4.0/"},
-        "UsageTerms": {"value": "Creative Commons Attribution-Share Alike"},
-        "AttributionRequired": {"value": "true"},
-    }
-    if artist is not None:
-        extmetadata["Artist"] = {"value": artist}
-    else:
-        extmetadata.pop("Credit")
-    return {
-        "pageid": 10,
-        "title": f"File:{filename}",
-        "imageinfo": [
-            {
-                "url": (
-                    f"https://upload.wikimedia.org/{filename}"
-                    "?utm_source=commons.wikimedia.org&utm_campaign=imageinfo"
-                ),
-                "descriptionurl": (
-                    f"https://commons.wikimedia.org/wiki/File:{filename}"
-                    "?uselang=en&utm_source=api"
-                ),
-                "thumburl": (
-                    f"https://upload.wikimedia.org/thumb/{filename}"
-                    "?width=512&utm_source=commons"
-                ),
-                "mime": "image/jpeg",
-                "size": 1234,
-                "width": 1200,
-                "height": 800,
-                "thumbwidth": 512,
-                "thumbheight": 341,
-                "sha1": "base36sha1",
-                "extmetadata": extmetadata,
-            }
-        ],
-    }
+class _FakeWikipedia:
+    """Cover every resolution outcome the module defines a status for."""
 
-
-class _FakeWikimedia:
     def __init__(self) -> None:
         self.calls: list[tuple[str, dict[str, str]]] = []
 
     def __call__(self, endpoint, parameters, _context):
         self.calls.append((endpoint, dict(parameters)))
         if endpoint == WIKIDATA_API_URL:
+            assert parameters["props"] == "sitelinks"
+            assert parameters["sitefilter"] == "enwiki"
             assert parameters["ids"] == "Q1|Q2|Q4|Q5|Q6"
             return {
                 "entities": {
-                    "Q1": {
-                        "claims": {
-                            "P18": [
-                                _p18("Other.jpg"),
-                                _p18("Resolved.jpg", rank="preferred"),
-                            ]
-                        }
-                    },
-                    "Q2": {"claims": {}},
+                    "Q1": {"sitelinks": {"enwiki": {"title": "Resolved species"}}},
+                    # No English article at all.
+                    "Q2": {"sitelinks": {}},
                     "Q4": {"missing": ""},
-                    "Q5": {"claims": {"P18": [_p18("Missing.jpg")]}},
-                    "Q6": {"claims": {"P18": [_p18("Incomplete.jpg")]}},
+                    "Q5": {"sitelinks": {"enwiki": {"title": "Deleted species"}}},
+                    "Q6": {"sitelinks": {"enwiki": {"title": "Blank species"}}},
                 }
             }
-        if endpoint == COMMONS_API_URL:
+        if endpoint == WIKIPEDIA_API_URL:
+            assert parameters["explaintext"] == "1"
+            assert parameters["exintro"] == "1"
             assert parameters["titles"] == (
-                "File:Incomplete.jpg|File:Missing.jpg|File:Resolved.jpg"
+                "Blank species|Deleted species|Resolved species"
             )
             return {
                 "query": {
+                    "redirects": [
+                        {"from": "Resolved species", "to": "Resolved species (fish)"}
+                    ],
                     "pages": [
-                        _image_page("Incomplete.jpg", artist=None),
-                        {"title": "File:Missing.jpg", "missing": True},
-                        _image_page(
-                            "Resolved.jpg",
-                            artist='<a href="/wiki/User:Jane">Jane Doe</a>',
+                        _article(
+                            "Resolved species (fish)",
+                            "A  freshwater\nfish of the family Examplidae.",
+                            page_id=11,
                         ),
-                    ]
+                        {"title": "Deleted species", "missing": True},
+                        _article("Blank species", "   ", page_id=13),
+                    ],
                 }
             }
         raise AssertionError(endpoint)
-
-
-def test_prefers_ranked_p18_and_ignores_deprecated_or_duplicate_claims() -> None:
-    entity = {
-        "claims": {
-            "P18": [
-                _p18("normal.jpg"),
-                _p18("preferred.jpg", rank="preferred"),
-                _p18("ignored.jpg", rank="deprecated"),
-                _p18("NORMAL.JPG"),
-            ]
-        }
-    }
-
-    assert _p18_candidates(entity) == ("preferred.jpg", "normal.jpg")
 
 
 def test_resolves_a_game_and_preserves_explicit_failure_outcomes(
@@ -250,10 +198,10 @@ def test_resolves_a_game_and_preserves_explicit_failure_outcomes(
     database = tmp_path / "onezoom.sqlite3"
     cache_root = tmp_path / "cache"
     _write_database(database)
-    fetcher = _FakeWikimedia()
-    fixed = datetime(2026, 8, 31, 12, 0, tzinfo=UTC)
+    fetcher = _FakeWikipedia()
+    fixed = datetime(2026, 9, 2, 12, 0, tzinfo=UTC)
 
-    manifest_path, manifest = resolve_game_wikimedia(
+    manifest_path, manifest = resolve_game_wikipedia(
         _game(),
         normalized_database=database,
         cache_root=cache_root,
@@ -264,32 +212,28 @@ def test_resolves_a_game_and_preserves_explicit_failure_outcomes(
     assert manifest_path.is_file()
     assert manifest["species_count"] == 6
     assert manifest["status_counts"] == {
-        "commons_page_missing": 1,
-        "incomplete_attribution": 1,
-        "missing_p18": 1,
+        "missing_extract": 1,
+        "missing_sitelink": 1,
         "missing_wikidata_id": 1,
         "resolved": 1,
         "wikidata_entity_missing": 1,
+        "wikipedia_page_missing": 1,
     }
     by_id = {record["species_id"]: record for record in manifest["records"]}
-    assert by_id[1]["p18_candidates"] == ["Resolved.jpg", "Other.jpg"]
-    assert by_id[1]["selected_p18"] == "Resolved.jpg"
-    assert by_id[1]["media"]["creator"] == "Jane Doe"
-    assert by_id[1]["media"]["license_name"] == "CC BY-SA 4.0"
-    assert by_id[1]["media"]["original_url"].endswith(
-        "?utm_source=commons.wikimedia.org&utm_campaign=imageinfo"
-    )
-    assert by_id[1]["media"]["thumbnail_url"].endswith(
-        "?width=512&utm_source=commons"
-    )
-    assert by_id[1]["media"]["commons_page_url"].endswith(
-        "?uselang=en&utm_source=api"
-    )
+    text = by_id[1]["text"]
+    # A redirect is followed, and the extract arrives whitespace-normalized.
+    assert text["title"] == "Resolved species (fish)"
+    assert text["extract"] == "A freshwater fish of the family Examplidae."
+    assert text["extract_truncated"] is False
+    assert text["revision_id"] == 5011
+    assert text["license_name"] == "CC BY-SA 4.0"
+    assert "Resolved species (fish)" in text["attribution_text"]
+    assert text["url"] == "https://en.wikipedia.org/wiki/Resolved_species_(fish)"
+    assert by_id[2]["status"] == "missing_sitelink"
     assert by_id[3]["status"] == "missing_wikidata_id"
-    assert by_id[5]["status"] == "commons_page_missing"
-    assert by_id[6]["media"]["missing_attribution_fields"] == [
-        "creator_or_credit"
-    ]
+    assert by_id[4]["status"] == "wikidata_entity_missing"
+    assert by_id[5]["status"] == "wikipedia_page_missing"
+    assert by_id[6]["status"] == "missing_extract"
     assert len(manifest["raw_requests"]) == 2
     assert all(not request["cache_hit"] for request in manifest["raw_requests"])
     for request in manifest["raw_requests"]:
@@ -298,7 +242,7 @@ def test_resolves_a_game_and_preserves_explicit_failure_outcomes(
 
     loaded = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert loaded["records"] == manifest["records"]
-    assert loaded["review_status"] == "required-before-download-or-promotion"
+    assert loaded["text_license"]["name"] == "CC BY-SA 4.0"
     assert len(fetcher.calls) == 2
 
 
@@ -306,24 +250,21 @@ def test_reuses_raw_request_cache_without_network(tmp_path: Path) -> None:
     database = tmp_path / "onezoom.sqlite3"
     cache_root = tmp_path / "cache"
     _write_database(database)
-    fixed = datetime(2026, 8, 31, 12, 0, tzinfo=UTC)
-    resolve_game_wikimedia(
+    resolve_game_wikipedia(
         _game(),
         normalized_database=database,
         cache_root=cache_root,
-        fetch_json=_FakeWikimedia(),
-        clock=lambda: fixed,
+        fetch_json=_FakeWikipedia(),
     )
 
     def no_network(*_args):
         raise AssertionError("cached rerun attempted a network request")
 
-    manifest_path, manifest = resolve_game_wikimedia(
+    _, manifest = resolve_game_wikipedia(
         _game(),
         normalized_database=database,
         cache_root=cache_root,
         fetch_json=no_network,
-        clock=lambda: fixed,
     )
 
     assert all(request["cache_hit"] for request in manifest["raw_requests"])
@@ -339,20 +280,14 @@ def test_resolves_only_a_requested_subset_of_game_species(tmp_path: Path) -> Non
             assert parameters["ids"] == "Q1"
             return {
                 "entities": {
-                    "Q1": {
-                        "claims": {"P18": [_p18("Resolved.jpg")]},
-                    }
+                    "Q1": {"sitelinks": {"enwiki": {"title": "Resolved species"}}}
                 }
             }
-        assert endpoint == COMMONS_API_URL
-        assert parameters["titles"] == "File:Resolved.jpg"
-        return {
-            "query": {
-                "pages": [_image_page("Resolved.jpg", artist="Jane Doe")]
-            }
-        }
+        assert endpoint == WIKIPEDIA_API_URL
+        assert parameters["titles"] == "Resolved species"
+        return {"query": {"pages": [_article("Resolved species", "A species.")]}}
 
-    manifest_path, manifest = resolve_game_wikimedia(
+    manifest_path, manifest = resolve_game_wikipedia(
         _game(),
         normalized_database=database,
         cache_root=tmp_path / "cache",
@@ -364,7 +299,6 @@ def test_resolves_only_a_requested_subset_of_game_species(tmp_path: Path) -> Non
     assert manifest_path.name.startswith("manifest-subset-")
     assert manifest["game_species_count"] == 6
     assert manifest["configuration"]["species_scope"] == "subset"
-    assert [record["species_id"] for record in manifest["records"]] == [1, 3]
     assert manifest["status_counts"] == {
         "missing_wikidata_id": 1,
         "resolved": 1,
@@ -375,99 +309,82 @@ def test_rejects_a_mismatched_normalized_dataset(tmp_path: Path) -> None:
     database = tmp_path / "onezoom.sqlite3"
     _write_database(database, dataset_version="other-version")
 
-    with pytest.raises(WikimediaResolutionError, match="dataset versions differ"):
-        resolve_game_wikimedia(
+    with pytest.raises(WikipediaResolutionError, match="dataset versions differ"):
+        resolve_game_wikipedia(
             _game(),
             normalized_database=database,
             cache_root=tmp_path / "cache",
-            fetch_json=_FakeWikimedia(),
+            fetch_json=_FakeWikipedia(),
         )
 
 
-def test_classifies_non_image_commons_media() -> None:
-    status, media = _commons_media(
-        {"title": "File:Recording.ogg", "imageinfo": [{"mime": "audio/ogg"}]}
-    )
+def test_truncates_a_long_lead_on_a_sentence_boundary() -> None:
+    sentence = "This species lives in the example biome. "
+    extract, truncated = _trim_extract(sentence * 60)
 
-    assert status == "unsupported_media"
-    assert media is None
-
-
-def test_classifies_an_image_without_a_download_url() -> None:
-    page = _image_page("No-url.jpg", artist="Example creator")
-    info = page["imageinfo"][0]  # type: ignore[index]
-    del info["url"]  # type: ignore[index]
-    del info["thumburl"]  # type: ignore[index]
-
-    status, media = _commons_media(page)
-
-    assert status == "missing_image_url"
-    assert media is not None
-    assert media["original_url"] is None
-    assert media["thumbnail_url"] is None
+    assert truncated is True
+    assert len(extract) <= MAX_EXTRACT_CHARACTERS
+    assert extract.endswith("biome.")
 
 
-def test_curl_transport_uses_an_argument_list_and_parses_json(monkeypatch) -> None:
-    def run(command, **options):
-        assert command[0] == "curl"
-        assert command[-1].startswith(WIKIDATA_API_URL)
-        assert options["check"] is False
-        return subprocess.CompletedProcess(
-            command, 0, stdout='{"entities": {"Q1": {}}}', stderr=""
-        )
+def test_truncates_without_a_boundary_using_an_ellipsis() -> None:
+    extract, truncated = _trim_extract("word " * 400)
 
-    monkeypatch.setattr("phylogenomica.data.wikimedia.subprocess.run", run)
-
-    payload = _fetch_json_curl(
-        WIKIDATA_API_URL, {"action": "wbgetentities", "ids": "Q1"}, None
-    )
-
-    assert payload == {"entities": {"Q1": {}}}
+    assert truncated is True
+    assert extract.endswith("…")
+    assert len(extract) <= MAX_EXTRACT_CHARACTERS + 1
 
 
-def test_command_line_reports_the_written_manifest(monkeypatch, capsys) -> None:
-    game = _game()
-    monkeypatch.setattr("phylogenomica.data.wikimedia.load_game", lambda _path: game)
-    monkeypatch.setattr(
-        "phylogenomica.data.wikimedia.resolve_game_wikimedia",
-        lambda *_args, **_kwargs: (
-            Path("data/cache/wikimedia/manifest.json"),
-            {"status_counts": {"resolved": 6}},
-        ),
-    )
-
-    main(["game.json"])
-
-    assert "resolved=6" in capsys.readouterr().out
+def test_keeps_a_short_lead_intact() -> None:
+    assert _trim_extract("  A   short   lead. ") == ("A short lead.", False)
+    assert _trim_extract("   ") == (None, False)
+    assert _trim_extract(None) == (None, False)
 
 
-def test_entity_reads_omit_maxlag_while_commons_reads_keep_it(
-    tmp_path: Path,
+def test_command_line_resolves_and_reports_status_counts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     database = tmp_path / "onezoom.sqlite3"
     _write_database(database)
-    fetcher = _FakeWikimedia()
-
-    resolve_game_wikimedia(
-        _game(),
-        normalized_database=database,
-        cache_root=tmp_path / "cache",
-        fetch_json=fetcher,
+    game = _game()
+    monkeypatch.setattr(
+        "phylogenomica.data.wikipedia.load_game", lambda _path: game
+    )
+    monkeypatch.setattr(
+        "phylogenomica.data.wikipedia._fetch_json", _FakeWikipedia()
     )
 
-    sent = {endpoint: parameters for endpoint, parameters in fetcher.calls}
-    # Wikidata folds Query Service lag into maxlag, and that service is one
-    # this project never reads, so a usable value would refuse every entity
-    # read for as long as it lags.
-    assert "maxlag" not in sent[WIKIDATA_API_URL]
-    # Commons maxlag is ordinary replica lag and means what it says.
-    assert sent[COMMONS_API_URL]["maxlag"] == "5"
+    main(
+        [
+            "game.json",
+            "--normalized-dir",
+            str(tmp_path),
+            "--cache-root",
+            str(tmp_path / "cache"),
+        ]
+    )
+
+    out = capsys.readouterr().out
+    assert "resolved=1" in out
+    assert "missing_sitelink=1" in out
+    manifest = json.loads(
+        (
+            tmp_path / "cache" / game.dataset_version / game.game_id / "manifest.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert manifest["reproduction_command"].startswith(
+        "phylogenomica-resolve-wikipedia game.json"
+    )
+
+
+def test_curl_transport_is_available_on_this_machine() -> None:
+    assert subprocess.run(["curl", "--version"], capture_output=True).returncode == 0
 
 
 def test_waits_out_replication_lag_and_then_succeeds(tmp_path: Path) -> None:
     database = tmp_path / "onezoom.sqlite3"
     _write_database(database)
-    real = _FakeWikimedia()
+    real = _FakeWikipedia()
     attempts = {"count": 0}
     waits: list[float] = []
 
@@ -475,11 +392,11 @@ def test_waits_out_replication_lag_and_then_succeeds(tmp_path: Path) -> None:
         attempts["count"] += 1
         if attempts["count"] == 1:
             raise WikimediaResolutionError(
-                "API returned an error: {'code': 'maxlag', 'lag': 11.7}"
+                "API returned an error: {'code': 'maxlag', 'lag': 15.05}"
             )
         return real(endpoint, parameters, context)
 
-    _, manifest = resolve_game_wikimedia(
+    _, manifest = resolve_game_wikipedia(
         _game(),
         normalized_database=database,
         cache_root=tmp_path / "cache",
@@ -499,8 +416,8 @@ def test_gives_up_after_persistent_replication_lag(tmp_path: Path) -> None:
     def always_lagged(*_args):
         raise WikimediaResolutionError("API returned an error: {'code': 'maxlag'}")
 
-    with pytest.raises(WikimediaResolutionError, match="stayed lagged"):
-        resolve_game_wikimedia(
+    with pytest.raises(WikipediaResolutionError, match="stayed lagged"):
+        resolve_game_wikipedia(
             _game(),
             normalized_database=database,
             cache_root=tmp_path / "cache",
@@ -520,8 +437,8 @@ def test_does_not_retry_an_error_that_describes_the_request(tmp_path: Path) -> N
         calls["count"] += 1
         raise WikimediaResolutionError("API returned an error: {'code': 'badvalue'}")
 
-    with pytest.raises(WikimediaResolutionError, match="badvalue"):
-        resolve_game_wikimedia(
+    with pytest.raises(WikipediaResolutionError, match="badvalue"):
+        resolve_game_wikipedia(
             _game(),
             normalized_database=database,
             cache_root=tmp_path / "cache",

@@ -405,16 +405,49 @@ the open stage's answer.
 
 ## Endgame
 
-Clicking the target in the final stage ends the game. The initial endgame then:
+Ending the last stage ends the game: clicking the target in expert play, or its
+closest relative in guided play. The endgame then:
 
 1. resolves remaining stage structure;
-2. highlights the already visible target image, vernacular name, and scientific
-   name;
-3. shows the completed cladogram;
+2. highlights the target image, vernacular name, and scientific name;
+3. reopens the completed cladogram at full width;
 4. shows the final score and relationship history.
 
 Free-text or early target identification is deferred as a possible alternate
 mode because it tests different knowledge from the core topology puzzle.
+
+### The completed tree reopens
+
+While a game is in progress the board compresses finished stages into narrow
+history bands and hides their clade names, because the open stage is the one
+the player has to reason about. A finished game has no open stage, so that
+compression has nothing left to buy. Every stage reopens at full width with its
+species labelled and every branching point showing both its name and its
+divergence age.
+
+The reopened tree is taller than the board and scrolls. It is scrolled back to
+the root once, on completion, so the lineage reads from Life outward rather
+than from the end the player just reached. After that the viewport is the
+player's; nothing re-centres it.
+
+The target is named in the endgame under both difficulties. Guided play has
+shown it from the opening stage; expert play has just placed it. In neither
+case does naming it disclose anything the completed lineage does not already.
+
+### Species detail on hover
+
+Lingering on a species opens an adjacent panel with an enlarged image, both
+names, and a short description drawn from the lead section of its English
+Wikipedia article. It works on the cards in the tray and on the names in the
+cladogram, so a relative placed three stages ago is still worth looking at.
+
+Detail is offered for cards that have not been guessed yet. A lead paragraph
+describes one species; it does not rank that species against a concealed
+target, so it teaches biology without answering the stage. Article text is
+licensed separately from the images and always appears with its own credit.
+
+A missing description is expected rather than exceptional — some species have
+no English article — and degrades to the names and picture alone.
 
 ## Initial scope
 

@@ -14,6 +14,11 @@ from phylogenomica.data.wikimedia_library import (
     load_wikimedia_library,
 )
 from phylogenomica.data.wikimedia_rights import classify_rights
+from phylogenomica.data.wikipedia_library import (
+    WikipediaDescription,
+    WikipediaLibrary,
+    WikipediaLibraryError,
+)
 from phylogenomica.gameplay.engine import GameplayError, initial_state, replay
 from phylogenomica.generation.feasibility import FeasibilityConfig
 from phylogenomica.generation.game import (
@@ -24,10 +29,12 @@ from phylogenomica.generation.game import (
     GeneratedGame,
     GeneratedStage,
 )
+from phylogenomica.prototype.descriptions import BackgroundDescriptionDownloader
 from phylogenomica.prototype.media import BackgroundMediaDownloader
 from phylogenomica.prototype.server import (
     PAGE_PATH,
     PrototypeSession,
+    _load_description_library,
     _load_media_library,
     _load_prototype_game,
     _next_game_factory,
@@ -900,3 +907,200 @@ def test_reports_a_missing_divergence_age_as_null() -> None:
 
     tiers = build_view(game, state)["lineage"][0]["tiers"]
     assert tiers[0]["age_ma"] is None
+
+
+def _description(species_id: int) -> WikipediaDescription:
+    title = f"Species {species_id}"
+    return WikipediaDescription(
+        species_id=species_id,
+        title=title,
+        url=f"https://en.wikipedia.org/wiki/Species_{species_id}",
+        extract=f"Species {species_id} is an example organism.",
+        truncated=False,
+        revision_id=900 + species_id,
+        license_name="CC BY-SA 4.0",
+        license_url="https://creativecommons.org/licenses/by-sa/4.0/",
+        attribution_text=f"“{title}”, English Wikipedia contributors, CC BY-SA 4.0",
+    )
+
+
+@pytest.fixture
+def description_library(tmp_path):
+    # Species 3 is deliberately absent: an unresolved description must degrade
+    # to a null rather than break the view.
+    return WikipediaLibrary(
+        tmp_path / "manifest.json",
+        "test-dataset-1",
+        {species_id: _description(species_id) for species_id in (1, 2, 4, 5, 6)},
+    )
+
+
+def test_cards_carry_descriptions_with_their_own_attribution(
+    description_library,
+) -> None:
+    game = _game()
+
+    view = build_view(
+        game, initial_state(game), descriptions=description_library
+    )
+
+    cards = {card["species_id"]: card for card in view["cards"]}
+    description = cards[DECOY_A]["description"]
+    assert description["text"] == "Species 1 is an example organism."
+    # Article prose is licensed separately from the image, so it carries its
+    # own attribution rather than borrowing the picture's.
+    assert description["license"] == "CC BY-SA 4.0"
+    assert description["url"].endswith("/Species_1")
+    assert "English Wikipedia contributors" in description["attribution"]
+    assert description["truncated"] is False
+    # An unresolved species still renders; the description is simply absent.
+    assert cards[UNLOCK]["description"] is None
+
+
+def test_cards_have_no_description_without_a_library() -> None:
+    game = _game()
+
+    view = build_view(game, initial_state(game))
+
+    assert all(card["description"] is None for card in view["cards"])
+
+
+def test_placed_lineage_species_carry_pictures_and_descriptions(
+    media_library, description_library
+) -> None:
+    game = _game()
+    state, _ = replay(game, [DECOY_A])
+
+    view = build_view(
+        game, state, media_library, descriptions=description_library
+    )
+
+    placed = view["lineage"][0]["tiers"][0]["species"][0]
+    assert placed["species_id"] == DECOY_A
+    # A placed species is already named on the board, so its picture and
+    # description are detail rather than disclosure.
+    assert placed["image_url"] == f"/media/{DECOY_A}"
+    assert placed["description"]["text"] == "Species 1 is an example organism."
+
+
+def test_a_completed_game_reveals_its_target_under_expert_play(
+    description_library,
+) -> None:
+    game = _game()
+    state, _ = replay(game, [UNLOCK, TARGET])
+    assert state.completed
+
+    view = build_view(game, state, descriptions=description_library)
+
+    # The lineage on the board already ends at the target, so naming it in the
+    # completion summary withholds nothing the player has not earned.
+    assert view["target"]["species_id"] == TARGET
+    assert view["target"]["role"] == "target"
+    assert view["target"]["selectable"] is False
+    assert view["target"]["description"]["text"] == "Species 6 is an example organism."
+
+
+def test_an_unfinished_expert_game_still_withholds_its_target() -> None:
+    game = _game()
+
+    assert build_view(game, initial_state(game))["target"] is None
+    state, _ = replay(game, [UNLOCK])
+    assert build_view(game, state)["target"] is None
+
+
+def test_background_description_download_fills_the_dataset_library(
+    tmp_path,
+) -> None:
+    game = _game()
+    all_ids = {
+        member.species_id for stage in game.stages for member in stage.members
+    }
+    resolver_calls = []
+    update_calls = []
+
+    def resolver(requested_game, **options):
+        resolver_calls.append((requested_game, options))
+        return tmp_path / "resolver.json", {
+            "records": [
+                {"species_id": species_id, "status": "resolved"}
+                for species_id in sorted(all_ids)
+            ]
+        }
+
+    def updater(_manifest, **options):
+        update_calls.append(set(options["species_ids"]))
+        return tmp_path / "library" / "manifest.json", {}
+
+    def loader(manifest_path, **_options):
+        return WikipediaLibrary(
+            manifest_path,
+            game.dataset_version,
+            {species_id: _description(species_id) for species_id in all_ids},
+        )
+
+    downloader = BackgroundDescriptionDownloader(
+        normalized_database=tmp_path / "onezoom.sqlite3",
+        cache_root=tmp_path / "cache",
+        library_root=tmp_path / "library",
+        resolver=resolver,
+        updater=updater,
+        library_loader=loader,
+    )
+    try:
+        downloader.request(game)
+        assert downloader.wait(game.game_id) == "ready"
+
+        # Text is small, so it is fetched for the whole game in one pass
+        # rather than being staged stage by stage the way images are.
+        assert len(resolver_calls) == 1
+        assert set(resolver_calls[0][1]["species_ids"]) == all_ids
+        assert update_calls == [all_ids]
+        status = downloader.player_status(game, 0)
+        assert status["available_count"] == status["total_count"] == 3
+        assert status["revision"] == 1
+        assert downloader.library.description(DECOY_A).title == "Species 1"
+    finally:
+        downloader.close()
+
+
+def test_background_description_download_skips_an_already_covered_game(
+    tmp_path,
+) -> None:
+    game = _game()
+    all_ids = {
+        member.species_id for stage in game.stages for member in stage.members
+    }
+
+    def resolver(*_args, **_kwargs):
+        raise AssertionError("a covered game must not reach the network")
+
+    downloader = BackgroundDescriptionDownloader(
+        normalized_database=tmp_path / "onezoom.sqlite3",
+        initial_library=WikipediaLibrary(
+            tmp_path / "manifest.json",
+            game.dataset_version,
+            {species_id: _description(species_id) for species_id in all_ids},
+        ),
+        resolver=resolver,
+    )
+    try:
+        downloader.request(game)
+        assert downloader.wait(game.game_id) == "ready"
+    finally:
+        downloader.close()
+
+
+def test_missing_description_library_is_optional_but_never_silently_wrong(
+    tmp_path,
+) -> None:
+    game = _game()
+    args = build_parser().parse_args([])
+
+    # Auto-detection simply finds nothing and the prototype runs without text.
+    assert _load_description_library(args, game) is None
+
+    explicit = build_parser().parse_args(
+        ["--description-library", str(tmp_path / "absent.json")]
+    )
+    with pytest.raises(WikipediaLibraryError, match="does not exist"):
+        _load_description_library(explicit, game)

@@ -31,6 +31,17 @@ from phylogenomica.data.wikimedia_library import (
     WikimediaLibraryError,
     load_wikimedia_library,
 )
+from phylogenomica.data.wikipedia import (
+    DEFAULT_CACHE_ROOT as DEFAULT_DESCRIPTION_CACHE_ROOT,
+)
+from phylogenomica.data.wikipedia_library import (
+    DEFAULT_LIBRARY_ROOT as DEFAULT_DESCRIPTION_LIBRARY_ROOT,
+)
+from phylogenomica.data.wikipedia_library import (
+    WikipediaLibrary,
+    WikipediaLibraryError,
+    load_wikipedia_library,
+)
 from phylogenomica.gameplay.engine import (
     DEFAULT_DIFFICULTY,
     DIFFICULTIES,
@@ -63,6 +74,7 @@ from phylogenomica.generation.game import (
     load_game,
 )
 from phylogenomica.generation.selection import RelativeSelectionError
+from phylogenomica.prototype.descriptions import BackgroundDescriptionDownloader
 from phylogenomica.prototype.media import BackgroundMediaDownloader
 from phylogenomica.tree.preprocess import (
     DEFAULT_NORMALIZED_DIR,
@@ -138,12 +150,43 @@ def _members_by_id(game: GeneratedGame) -> dict[int, GameMember]:
     }
 
 
+def _description(
+    species_id: int, descriptions: WikipediaLibrary | None
+) -> dict[str, object] | None:
+    """Render one species' description with the attribution it must carry.
+
+    Article prose is licensed separately from the images, so the text never
+    travels without its title, article link, and license.
+    """
+    entry = None if descriptions is None else descriptions.description(species_id)
+    if entry is None:
+        return None
+    return {
+        "text": entry.extract,
+        "truncated": entry.truncated,
+        "title": entry.title,
+        "url": entry.url,
+        "attribution": entry.attribution_text,
+        "license": entry.license_name,
+        "license_url": entry.license_url,
+    }
+
+
+def _image_url(
+    species_id: int, media_library: WikimediaLibrary | None
+) -> str | None:
+    if media_library is None or media_library.asset(species_id) is None:
+        return None
+    return f"/media/{species_id}"
+
+
 def _card(
     member: GameMember,
     placed: PlacedSpecies | None,
     media_library: WikimediaLibrary | None,
     *,
     selectable: bool = True,
+    descriptions: WikipediaLibrary | None = None,
 ) -> dict[str, object]:
     """Render one card, withholding the answer until the card is placed.
 
@@ -164,6 +207,7 @@ def _card(
         ),
         "rights": None if asset is None else asset.attribution_text,
         "license": None if asset is None else asset.license_name,
+        "description": _description(member.species_id, descriptions),
     }
     if asset is not None:
         payload["image_attribution"] = {
@@ -190,6 +234,8 @@ def _lineage(
     state: GameState,
     final_visible_stage: int | None = None,
     difficulty: Difficulty = DEFAULT_DIFFICULTY,
+    media_library: WikimediaLibrary | None = None,
+    descriptions: WikipediaLibrary | None = None,
 ) -> list[dict[str, object]]:
     """Render placed species into fixed anonymous slots, root to target.
 
@@ -232,6 +278,8 @@ def _lineage(
                 if placed is None:
                     continue
                 card = members[species_id].card
+                # A placed species is already named on the board, so its
+                # picture and description add detail rather than disclosure.
                 rendered_species.append(
                     {
                         "species_id": species_id,
@@ -240,6 +288,8 @@ def _lineage(
                         "role": placed.role,
                         "placement": placed.placement,
                         "slot_index": slot_index,
+                        "image_url": _image_url(species_id, media_library),
+                        "description": _description(species_id, descriptions),
                     }
                 )
             # Geometry and divergence age describe the branching event itself,
@@ -268,6 +318,8 @@ def _lineage(
                     "scientific_name": card.scientific_name,
                     "role": placed.role,
                     "placement": placed.placement,
+                    "image_url": _image_url(placed.species_id, media_library),
+                    "description": _description(placed.species_id, descriptions),
                 }
             )
         lineage.append(
@@ -280,11 +332,32 @@ def _lineage(
     return lineage
 
 
+def _visible_target(
+    game: GeneratedGame, state: GameState, difficulty: Difficulty
+) -> GameMember | None:
+    """Return the target card the page is allowed to show right now.
+
+    Guided play reveals it from the opening stage. A completed game may show
+    it under any difficulty: the lineage on the board already ends there, so
+    naming it withholds nothing the player has not earned.
+    """
+    revealed = revealed_target(game, difficulty)
+    if revealed is not None:
+        return revealed
+    if not state.completed:
+        return None
+    for member in game.stages[-1].members:
+        if member.role == "target":
+            return member
+    return None
+
+
 def build_view(
     game: GeneratedGame,
     state: GameState,
     media_library: WikimediaLibrary | None = None,
     review_stage_index: int | None = None,
+    descriptions: WikipediaLibrary | None = None,
 ) -> dict[str, object]:
     """Render everything the page may know at this moment."""
     difficulty = state.difficulty
@@ -312,16 +385,23 @@ def build_view(
                 placed_by_id.get(member.species_id),
                 media_library,
                 selectable=member.species_id in selectable_ids,
+                descriptions=descriptions,
             )
             for member in dealt_members(open_stage, difficulty)
         ]
-    target = revealed_target(game, difficulty)
+    target = _visible_target(game, state, difficulty)
     return {
         "difficulty": difficulty,
         "target": (
             None
             if target is None
-            else _card(target, None, media_library, selectable=False)
+            else _card(
+                target,
+                None,
+                media_library,
+                selectable=False,
+                descriptions=descriptions,
+            )
         ),
         "stage_index": visible_stage_index,
         "stage_count": len(game.stages),
@@ -335,7 +415,14 @@ def build_view(
         "stage_scores": list(state.stage_scores),
         "completed": state.completed,
         "reviewing_stage": review_stage_index is not None,
-        "lineage": _lineage(game, state, review_stage_index, difficulty),
+        "lineage": _lineage(
+            game,
+            state,
+            review_stage_index,
+            difficulty,
+            media_library,
+            descriptions,
+        ),
     }
 
 
@@ -375,21 +462,42 @@ class _Handler(BaseHTTPRequestHandler):
     def _media_downloader(self) -> BackgroundMediaDownloader | None:
         return self.server.media_downloader  # type: ignore[attr-defined]
 
+    @property
+    def _description_library(self) -> WikipediaLibrary | None:
+        downloader = self._description_downloader
+        if downloader is not None:
+            return downloader.library
+        return self.server.description_library  # type: ignore[attr-defined]
+
+    @property
+    def _description_downloader(self) -> BackgroundDescriptionDownloader | None:
+        return self.server.description_downloader  # type: ignore[attr-defined]
+
     def _view(self) -> dict[str, object]:
         view = build_view(
             self._session.game,
             self._session.state,
             self._media_library,
             self._session.review_stage_index,
+            self._description_library,
+        )
+        target = view.get("target")
+        also_shown = (
+            () if target is None else (int(target["species_id"]),)  # type: ignore[index]
         )
         if self._media_downloader is not None:
-            target = view.get("target")
             view["media_download"] = self._media_downloader.player_status(
                 self._session.game,
                 int(view["stage_index"]),
-                also_shown=(
-                    () if target is None else (int(target["species_id"]),)  # type: ignore[index]
-                ),
+                also_shown=also_shown,
+            )
+        if self._description_downloader is not None:
+            view["description_download"] = (
+                self._description_downloader.player_status(
+                    self._session.game,
+                    int(view["stage_index"]),
+                    also_shown=also_shown,
+                )
             )
         return view
 
@@ -477,6 +585,8 @@ class _Handler(BaseHTTPRequestHandler):
                 return
             if self._media_downloader is not None:
                 self._media_downloader.request(self._session.game)
+            if self._description_downloader is not None:
+                self._description_downloader.request(self._session.game)
             self._send_json(
                 200,
                 {"view": self._view()},
@@ -511,13 +621,16 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 class _PrototypeHTTPServer(ThreadingHTTPServer):
-    """Prototype server that also owns its optional background worker."""
+    """Prototype server that also owns its optional background workers."""
 
     media_downloader: BackgroundMediaDownloader | None = None
+    description_downloader: BackgroundDescriptionDownloader | None = None
 
     def server_close(self) -> None:
         if self.media_downloader is not None:
             self.media_downloader.close()
+        if self.description_downloader is not None:
+            self.description_downloader.close()
         super().server_close()
 
 
@@ -527,6 +640,8 @@ def serve(
     next_game: Callable[[GeneratedGame], GeneratedGame],
     media_library: WikimediaLibrary | None = None,
     media_downloader: BackgroundMediaDownloader | None = None,
+    description_library: WikipediaLibrary | None = None,
+    description_downloader: BackgroundDescriptionDownloader | None = None,
     host: str = "127.0.0.1",
     port: int = 8000,
     difficulty: Difficulty = DEFAULT_DIFFICULTY,
@@ -538,8 +653,12 @@ def serve(
     )
     httpd.media_library = media_library  # type: ignore[attr-defined]
     httpd.media_downloader = media_downloader
+    httpd.description_library = description_library  # type: ignore[attr-defined]
+    httpd.description_downloader = description_downloader
     if media_downloader is not None:
         media_downloader.request(game)
+    if description_downloader is not None:
+        description_downloader.request(game)
     return httpd
 
 
@@ -595,9 +714,35 @@ def build_parser() -> argparse.ArgumentParser:
         "--media-transport",
         choices=("urllib", "curl"),
         default="urllib",
-        help="verified HTTPS transport for background metadata and images",
+        help=(
+            "verified HTTPS transport for every background enrichment fetch: "
+            "metadata, images, and descriptions"
+        ),
     )
     parser.add_argument("--media-ca-file", type=Path)
+    parser.add_argument(
+        "--description-library",
+        type=Path,
+        help=(
+            "local Wikipedia description library manifest (default: auto-detect "
+            "the current dataset under assets/processed/wikipedia-library)"
+        ),
+    )
+    parser.add_argument(
+        "--download-missing-descriptions",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "resolve missing Wikipedia species descriptions in the background "
+            "(default: disabled)"
+        ),
+    )
+    parser.add_argument(
+        "--description-cache-root",
+        type=Path,
+        default=DEFAULT_DESCRIPTION_CACHE_ROOT,
+        help="ignored Wikipedia text cache used by background downloads",
+    )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument(
@@ -691,6 +836,29 @@ def _load_media_library(
     )
 
 
+def _load_description_library(
+    args: argparse.Namespace, game: GeneratedGame
+) -> WikipediaLibrary | None:
+    """Load an explicit library or auto-detect the current dataset's library."""
+    manifest_path = args.description_library
+    explicit = manifest_path is not None
+    if manifest_path is None:
+        manifest_path = (
+            DEFAULT_DESCRIPTION_LIBRARY_ROOT
+            / game.dataset_version
+            / "manifest.json"
+        )
+    if not manifest_path.exists():
+        if explicit:
+            raise WikipediaLibraryError(
+                f"description library manifest does not exist: {manifest_path}"
+            )
+        return None
+    return load_wikipedia_library(
+        manifest_path, expected_dataset_version=game.dataset_version
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     try:
@@ -706,6 +874,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     try:
         media_library = _load_media_library(args, game)
     except WikimediaLibraryError as error:
+        raise SystemExit(str(error)) from error
+
+    try:
+        description_library = _load_description_library(args, game)
+    except WikipediaLibraryError as error:
         raise SystemExit(str(error)) from error
 
     media_downloader = None
@@ -724,11 +897,29 @@ def main(argv: Sequence[str] | None = None) -> None:
             transport=args.media_transport,
         )
 
+    description_downloader = None
+    if args.download_missing_descriptions:
+        description_library_root = (
+            args.description_library.parent.parent
+            if args.description_library is not None
+            else DEFAULT_DESCRIPTION_LIBRARY_ROOT
+        )
+        description_downloader = BackgroundDescriptionDownloader(
+            normalized_database=args.normalized_dir / DATABASE_FILENAME,
+            initial_library=description_library,
+            cache_root=args.description_cache_root,
+            library_root=description_library_root,
+            ca_file=args.media_ca_file,
+            transport=args.media_transport,
+        )
+
     httpd = serve(
         game,
         next_game=_next_game_factory(args),
         media_library=media_library,
         media_downloader=media_downloader,
+        description_library=description_library,
+        description_downloader=description_downloader,
         host=args.host,
         port=args.port,
         difficulty=args.difficulty,

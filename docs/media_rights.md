@@ -34,8 +34,17 @@ HTTPS rights URLs:
 |---|---|---|
 | CC BY 2.0, 2.5, 3.0, or 4.0 | `CC-BY-*` | TASL attribution and change notice |
 | CC BY-SA 2.0, 2.5, 3.0, or 4.0 | `CC-BY-SA-*` | TASL, change notice, ShareAlike adaptations |
-| CC BY-SA 2.0 de | `CC-BY-SA-2.0-DE` | Same, under the German ported license |
+| CC BY-SA 1.0, 2.0, 2.5, 3.0, or 4.0 `<port>` | `CC-BY-SA-*-<PORT>` | Same, under that national port |
+| CC BY 1.0–4.0 `<port>` | `CC-BY-*-<PORT>` | Same, under that national port |
 | CC0 | `CC0-1.0` | No legal attribution condition; retain provenance anyway |
+
+Jurisdiction ports such as `CC BY 3.0 us` or `CC BY-SA 2.0 fr` are parsed
+rather than enumerated. A port is the same license under a national adaptation
+and carries the same obligations, so listing version-and-port pairs one at a
+time only produced a table with gaps: a 2026-09-02 audit found nine species
+blocked purely because their port was absent from it. A label that is not a
+recognized Creative Commons form — `GPL`, for example — is still blocked and
+still requires review.
 
 TASL means title, author, source, and license. Each promoted asset must retain
 its Commons filename, supplied creator or credit, Commons file page, exact
@@ -45,6 +54,24 @@ A simple format conversion or thumbnail rendition should still be disclosed.
 ShareAlike applies to copyrightable adaptations of the image, not automatically
 to the surrounding game, code, or collection. The asset manifest must keep the
 image's license distinct from the project's own license.
+
+## Article text
+
+This policy governs media files. Wikipedia article prose is a separate work
+under a separate licence and is not classified by the tables above.
+
+Every lead-section extract is licensed CC BY-SA 4.0 by the English Wikipedia
+contributors who wrote it. A description therefore may not travel without its
+article title, canonical article URL, revision ID, and licence name, and the
+presentation layer must show that credit wherever it shows the text: on a card,
+in the hover detail, and in the endgame summary. The text credit is kept
+distinct from the image credit even when both describe the same species,
+because the two works have different authors and may have different licences.
+
+ShareAlike applies to copyrightable adaptations of the article text, not to the
+surrounding game or code. Truncating a lead to its first complete sentences is
+a verbatim excerpt rather than an adaptation, but the extract is still stored
+with its revision ID so the exact source text remains identifiable.
 
 ## Conditional rights identifiers
 

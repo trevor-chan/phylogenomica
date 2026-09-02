@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shlex
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
@@ -40,11 +41,13 @@ class RightsRule:
     rationale: str
 
 
-def _cc_by(version: str) -> RightsRule:
+def _cc_by(version: str, *, port: str | None = None) -> RightsRule:
+    suffix = f"-{port.upper()}" if port is not None else ""
+    path = f"{version}/{port}/" if port is not None else f"{version}/"
     return RightsRule(
-        identifier=f"CC-BY-{version}",
+        identifier=f"CC-BY-{version}{suffix}",
         category="standard-open-license",
-        canonical_url=f"https://creativecommons.org/licenses/by/{version}/",
+        canonical_url=f"https://creativecommons.org/licenses/by/{path}",
         promotion_status="ready",
         requires_attribution=True,
         requires_share_alike=False,
@@ -103,6 +106,27 @@ STANDARD_RULES = {
         rationale="Standard worldwide public-domain dedication and fallback.",
     ),
 }
+
+# Commons labels jurisdiction ports as `CC BY 3.0 us` or `CC BY-SA 2.0 fr`.
+# These are the same licences carrying the same obligations under a national
+# port, so they are parsed rather than enumerated: every version-and-port pair
+# would make the table long enough to keep leaving gaps in.
+_PORTED_CC_LABEL = re.compile(
+    r"^CC (?P<kind>BY|BY-SA) (?P<version>1\.0|2\.0|2\.5|3\.0|4\.0)"
+    r"(?: (?P<port>[a-z]{2,3}))?$"
+)
+
+
+def _parsed_cc_rule(label: object) -> RightsRule | None:
+    """Return a rule for a standard Creative Commons label, ported or not."""
+    if not isinstance(label, str):
+        return None
+    match = _PORTED_CC_LABEL.match(label.strip())
+    if match is None:
+        return None
+    builder = _cc_by if match["kind"] == "BY" else _cc_by_sa
+    return builder(match["version"], port=match["port"])
+
 
 CONDITIONAL_RULES = {
     "Public domain": RightsRule(
@@ -220,7 +244,11 @@ def classify_rights(record: Mapping[str, Any]) -> dict[str, Any]:
     label = record.get("license_name")
     rule = None
     if isinstance(label, str):
-        rule = STANDARD_RULES.get(label) or CONDITIONAL_RULES.get(label)
+        rule = (
+            STANDARD_RULES.get(label)
+            or CONDITIONAL_RULES.get(label)
+            or _parsed_cc_rule(label)
+        )
     if rule is None:
         rule = _blocked_rule(label, "The license label is not in the reviewed policy.")
     creator = record.get("creator") or record.get("credit")

@@ -16,6 +16,7 @@ import sqlite3
 import ssl
 import subprocess
 import tempfile
+import time
 from collections import Counter
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
@@ -45,6 +46,17 @@ WIKIDATA_BATCH_SIZE = 50
 # small even though the API permits more titles in one request.
 COMMONS_BATCH_SIZE = 10
 THUMBNAIL_WIDTH = 512
+# A Commons request carries maxlag so a lagging replica sheds our load rather
+# than serving stale metadata. That refusal is a scheduling signal, not a
+# failure, so it is waited out rather than ending the run.
+#
+# The Wikidata request deliberately does not carry it. Wikidata folds Query
+# Service lag into its maxlag figure, and that service — which this project
+# never reads — routinely sits minutes behind, so any usable maxlag would
+# refuse every entity read for as long as the catch-up lasts. These are cached
+# read-only lookups, not edits.
+MAXLAG_SECONDS = 5
+MAXLAG_ATTEMPTS = 4
 USER_AGENT = (
     "Phylogenomica/0.1 "
     "(https://github.com/trevor-chan/phylogenomica; metadata enrichment)"
@@ -67,6 +79,7 @@ STATUS_DEFINITIONS = {
 
 JsonFetcher = Callable[[str, Mapping[str, str], ssl.SSLContext], Mapping[str, Any]]
 Clock = Callable[[], datetime]
+Sleeper = Callable[[float], None]
 
 
 class WikimediaResolutionError(RuntimeError):
@@ -282,6 +295,28 @@ def _cached_request(
         "sha256": sha256_file(path),
         "cache_hit": cache_hit,
     }
+
+
+def _cached_request_with_backoff(
+    *, sleep: Sleeper = time.sleep, **kwargs: Any
+) -> tuple[Mapping[str, Any], dict[str, object]]:
+    """Perform one cached API request, waiting out replication lag.
+
+    Only a maxlag refusal is retried: every other API error describes the
+    request itself and would fail identically however long we waited.
+    """
+    for attempt in range(1, MAXLAG_ATTEMPTS + 1):
+        try:
+            return _cached_request(**kwargs)
+        except WikimediaResolutionError as error:
+            if "maxlag" not in str(error).casefold():
+                raise
+            if attempt == MAXLAG_ATTEMPTS:
+                raise WikimediaResolutionError(
+                    f"the API stayed lagged over {MAXLAG_ATTEMPTS} attempts: {error}"
+                ) from error
+            sleep(MAXLAG_SECONDS * attempt)
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 def _game_species_ids(game: GeneratedGame) -> tuple[int, ...]:
@@ -550,6 +585,7 @@ def resolve_game_wikimedia(
     species_ids: Collection[int] | None = None,
     fetch_json: JsonFetcher = _fetch_json,
     clock: Clock = _now,
+    sleep: Sleeper = time.sleep,
     reproduction_command: str | None = None,
 ) -> tuple[Path, dict[str, Any]]:
     """Resolve one game's species and write a resumable metadata audit."""
@@ -562,14 +598,14 @@ def resolve_game_wikimedia(
     entities: dict[str, Mapping[str, Any]] = {}
     wikidata_evidence: dict[str, str] = {}
     for batch in _batches(qids, WIKIDATA_BATCH_SIZE):
-        payload, evidence = _cached_request(
+        payload, evidence = _cached_request_with_backoff(
+            sleep=sleep,
             endpoint=WIKIDATA_API_URL,
             parameters={
                 "action": "wbgetentities",
                 "format": "json",
                 "formatversion": "2",
                 "ids": "|".join(batch),
-                "maxlag": "5",
                 "props": "claims",
             },
             source="wikidata",
@@ -600,7 +636,8 @@ def resolve_game_wikimedia(
     commons_evidence: dict[str, str] = {}
     for batch in _batches(filenames, COMMONS_BATCH_SIZE):
         requested_titles = tuple(f"File:{filename}" for filename in batch)
-        payload, evidence = _cached_request(
+        payload, evidence = _cached_request_with_backoff(
+            sleep=sleep,
             endpoint=COMMONS_API_URL,
             parameters={
                 "action": "query",

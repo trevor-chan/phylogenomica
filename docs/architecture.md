@@ -51,8 +51,20 @@ existing download manifest into a dataset-level, species-keyed working library.
 It reuses matching validated assets across seeds and targets, downloads only
 missing or source-changed records, rejects blocked rights before retrieval,
 uses content-addressed local filenames, and preserves prior species on each
-merge. None of these components promotes assets, and the gameplay engine never
-calls a live metadata service.
+merge. A species that cannot be downloaded or whose rights are blocked is
+counted and skipped rather than failing the merge: downloads are accumulated
+and written only at the end, so one unusable file would otherwise discard an
+entire batch. Nothing is recorded for a skipped species, so the next update
+retries it. None of these components promotes assets, and the gameplay engine
+never calls a live metadata service.
+
+The description resolver and description library are the text counterparts of
+that pair and follow the same shape: resolve a game's species through the
+Wikidata sitelink bridge into cached, evidence-backed review records, then
+merge the resolved records into a dataset-level, species-keyed working library.
+Text is small enough to be stored inline in the library manifest rather than in
+content-addressed files, and a new article revision is a new fingerprint, so a
+refreshed resolve replaces stale prose instead of reusing it.
 
 ### `phylogenomica.tree`
 
@@ -127,6 +139,19 @@ operation finishes. The HTTP API reports only state and image counts for the
 open stage; it never sends future species IDs or media readiness. Each library
 reload is an immutable reference swap, so request handlers see either the old
 or new validated index. Worker failure leaves gameplay and placeholders intact.
+
+`--download-missing-descriptions` adds a second, independent worker of the same
+shape for Wikipedia text. It has no staged priority: text is small, so one pass
+resolves the whole game rather than the open stage first. Both workers report
+their own progress, and either can fail without affecting the other or the
+game.
+
+A description is presentation metadata and never reaches the engine. Cards, the
+placed species in the tree, and the endgame summary all carry the same
+description payload, each with its own text attribution beside any image
+attribution. Descriptions are attached to cards the player has not yet chosen,
+which is deliberate: a lead paragraph describes one species without ranking it
+against a concealed target, so it adds biology without answering the stage.
 
 The prototype accepts an explicit target or serialized game, but defaults to a
 uniform random row from the eligible-target index when neither is supplied.

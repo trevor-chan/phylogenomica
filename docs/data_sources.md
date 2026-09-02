@@ -93,6 +93,73 @@ copyright status and license requirements.
 The live human/seed-42 pilot completed on 2026-09-01. It resolved complete
 metadata for 43 of 50 species, found three additional image candidates with
 missing creator/credit, and left four species without a Wikidata `P18` path.
+
+#### Species descriptions
+
+Description resolver version 1 reuses the same Wikidata bridge for text. It
+batches Q-IDs through `wbgetentities` with `props=sitelinks` and
+`sitefilter=enwiki`, then requests each article's lead section from the English
+Wikipedia `query` API with `exintro`, `explaintext`, and `inprop=url`. It
+follows title normalization and redirects, records the page and revision IDs
+alongside the canonical article URL, and truncates a long lead on a sentence
+boundary. Raw response envelopes are stored under `data/cache/wikipedia/` with
+the same request URL, retrieval time, and checksum evidence the media resolver
+uses.
+
+It reports distinct statuses for missing or invalid Wikidata IDs, missing
+entities, an entity with no English sitelink, a linked article that does not
+exist, and an article with no usable extract. It performs no fuzzy name lookup
+and never substitutes a genus or family article for an absent species article:
+a description of a different taxon would teach the wrong relationship.
+
+Article prose is licensed CC BY-SA 4.0 rather than under the per-file Commons
+terms, so every record carries its own title, article link, revision ID, and
+license. See `media_rights.md` for the text-attribution rule.
+
+#### Replication lag and `maxlag`
+
+`maxlag` is a courtesy parameter the client sends: it asks the server to refuse
+the request rather than serve it while the wiki is behind, so that automated
+readers back off instead of adding load. A refusal is therefore self-imposed
+and carries no penalty; the same request without the parameter is served
+normally.
+
+Wikidata is a special case. Its `maxlag` figure folds in Wikidata Query Service
+lag — a SPARQL endpoint this project never reads — and that service routinely
+runs minutes to hours behind. Live observations on 2026-09-01 and 2026-09-02
+returned `"type": "wikibase-queryservice"` with `queryserviceLag` between 706
+and 924 seconds, refusing every `maxlag=5` entity read for as long as it
+persisted. No usable value avoids this, because any threshold low enough to
+describe database health is far below the Query Service's normal lag.
+
+Both resolvers therefore omit `maxlag` on Wikidata entity reads, which are
+cached read-only lookups rather than edits, and keep it on Commons `imageinfo`
+and Wikipedia `extracts` requests, where it measures ordinary replica lag and
+is almost always satisfied. A lag refusal on those endpoints is a scheduling
+signal, not a failure: one shared bounded backoff waits it out over four
+attempts before giving up. Every other API error describes the request itself
+and is raised immediately.
+
+Note that this parameter is part of the cached request URL. Removing it from
+the Wikidata reads changed their cache keys, so the first run after the change
+re-fetches entity data once; Commons and Wikipedia responses are unaffected.
+
+#### Coverage
+
+Measured over 150 species in three randomly targeted games on 2026-09-02:
+85.3% of species carry an image and 82.7% carry a description. The remaining
+loss is entirely at resolution — species with no Wikidata image, no Wikidata
+ID, no English article, or no creator/credit on Commons — and every record the
+resolvers do produce now reaches the game. OneZoom's own `images` table covers
+100% of the species the Wikidata bridge cannot reach and is the documented
+route to higher image coverage. See the
+[enrichment coverage audit](audits/enrichment_coverage_2026_09_02.md).
+
+The live human/seed-42 description pilot completed on 2026-09-02. It resolved
+42 of 50 species. Two species carry no Wikidata ID at all, and six have a
+Wikidata item with no English Wikipedia sitelink. Coverage is a presentation
+property: an unresolved description leaves the card, the tree, and the endgame
+summary intact.
 The initial run exposed a URL-normalization defect caused by Wikimedia's
 ampersand-delimited tracking parameters. Resolver version 2 fixes it, and a
 cache-only rebuild restored all 46 original and thumbnail URLs without new API

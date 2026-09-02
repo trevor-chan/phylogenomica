@@ -34,7 +34,11 @@ WIKIMEDIA_DOWNLOADER_VERSION = 1
 WIKIMEDIA_DOWNLOAD_MANIFEST_SCHEMA_VERSION = 1
 DEFAULT_OUTPUT_ROOT = Path("assets/processed/wikimedia")
 DEFAULT_MAX_BYTES = 20 * 1024 * 1024
-SUPPORTED_MIME_TYPES = {"image/jpeg": ".jpg", "image/png": ".png"}
+SUPPORTED_MIME_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/gif": ".gif",
+}
 
 
 class WikimediaDownloadError(RuntimeError):
@@ -134,11 +138,26 @@ def _jpeg_details(data: bytes) -> ImageDetails | None:
     return None
 
 
+def _gif_details(data: bytes) -> ImageDetails | None:
+    """Read a GIF logical screen descriptor.
+
+    Commons serves GIF sources as GIF even at thumbnail sizes rather than
+    transcoding them, so the format has to be read here to be usable at all.
+    """
+    if len(data) < 10 or data[:6] not in (b"GIF87a", b"GIF89a"):
+        return None
+    width = int.from_bytes(data[6:8], "little")
+    height = int.from_bytes(data[8:10], "little")
+    if width <= 0 or height <= 0:
+        return None
+    return ImageDetails("image/gif", width, height)
+
+
 def _image_details(data: bytes) -> ImageDetails:
-    details = _png_details(data) or _jpeg_details(data)
+    details = _png_details(data) or _jpeg_details(data) or _gif_details(data)
     if details is None:
         raise WikimediaDownloadError(
-            "downloaded bytes are not a supported PNG or JPEG image"
+            "downloaded bytes are not a supported PNG, JPEG, or GIF image"
         )
     return details
 
@@ -265,23 +284,39 @@ def _atomic_bytes(path: Path, data: bytes) -> None:
 
 
 def _validated_download(
-    response: BinaryResponse, expected_mime_type: object
+    response: BinaryResponse,
+    expected_mime_type: object,
+    source_variant: str = "original",
 ) -> ImageDetails:
+    """Validate downloaded bytes against what was actually requested.
+
+    A thumbnail is a rendition Commons produces on demand, so its format is
+    the server's choice and need not match the source file: a TIFF or SVG
+    original is served as JPEG or PNG. What must agree there is the response
+    content type and the bytes themselves. Only an original download is
+    required to match the media type the resolver recorded.
+    """
     details = _image_details(response.body)
     expected = _normalized_mime_type(expected_mime_type)
     received = _normalized_mime_type(response.content_type)
-    if expected not in SUPPORTED_MIME_TYPES:
-        raise WikimediaDownloadError(
-            f"resolver selected unsupported media type {expected!r}"
-        )
     if received not in SUPPORTED_MIME_TYPES:
         raise WikimediaDownloadError(
             f"server returned unsupported content type {received!r}"
         )
-    if details.mime_type != expected or details.mime_type != received:
+    if details.mime_type != received:
         raise WikimediaDownloadError(
-            "image signature, resolver media type, and response content type differ"
+            "image signature and response content type differ"
         )
+    if source_variant == "original":
+        if expected not in SUPPORTED_MIME_TYPES:
+            raise WikimediaDownloadError(
+                f"resolver selected unsupported media type {expected!r}"
+            )
+        if details.mime_type != expected:
+            raise WikimediaDownloadError(
+                "image signature, resolver media type, and response content "
+                "type differ"
+            )
     if _absolute_http_url(response.final_url) is None:
         raise WikimediaDownloadError("download ended at an invalid response URL")
     return details
@@ -307,7 +342,7 @@ def download_resolved_record(
         )
     url, source_variant = _download_source(record)
     response = fetch_binary(url, context, max_bytes)
-    details = _validated_download(response, media.get("mime_type"))
+    details = _validated_download(response, media.get("mime_type"), source_variant)
     extension = SUPPORTED_MIME_TYPES[details.mime_type]
     relative_path = Path("files") / f"{species_id}{extension}"
     downloaded_at = clock().astimezone(UTC).isoformat()

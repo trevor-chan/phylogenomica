@@ -9,6 +9,7 @@ from phylogenomica.data.wikimedia_download import (
     BinaryResponse,
     WikimediaDownloadError,
     _image_details,
+    download_resolved_record,
     download_wikimedia_assets,
 )
 
@@ -170,4 +171,75 @@ def test_rejects_non_image_bytes_even_with_an_image_content_type(
             output_root=tmp_path / "assets",
             limit=1,
             fetch_binary=fetch,
+        )
+
+
+GIF_1_BY_1 = b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff"
+
+
+def test_accepts_a_thumbnail_rendition_of_an_unsupported_source_format(
+    tmp_path: Path,
+) -> None:
+    manifest_path = tmp_path / "manifest.json"
+    _write_manifest(manifest_path)
+    record = _record(1)
+    # Commons renders a TIFF or SVG original as JPEG or PNG at thumbnail size.
+    record["media"]["mime_type"] = "image/tiff"  # type: ignore[index]
+
+    def fetch(url, _context, _max_bytes):
+        return BinaryResponse(PNG_1_BY_1, "image/png", url)
+
+    downloaded, body = download_resolved_record(
+        record, context=None, max_bytes=1024, fetch_binary=fetch
+    )
+
+    # What was downloaded is what is recorded; the source format stays as
+    # provenance on the original_url fields.
+    assert downloaded["mime_type"] == "image/png"
+    assert downloaded["download_url_variant"] == "thumbnail"
+    assert downloaded["local_path"].endswith(".png")
+    assert body == PNG_1_BY_1
+
+
+def test_an_original_download_must_still_match_the_resolved_media_type() -> None:
+    record = _record(1)
+    record["media"]["mime_type"] = "image/tiff"  # type: ignore[index]
+    del record["media"]["thumbnail_url"]  # type: ignore[index]
+
+    def fetch(url, _context, _max_bytes):
+        return BinaryResponse(PNG_1_BY_1, "image/png", url)
+
+    with pytest.raises(WikimediaDownloadError, match="unsupported media type"):
+        download_resolved_record(
+            record, context=None, max_bytes=1024, fetch_binary=fetch
+        )
+
+
+def test_reads_gif_dimensions_from_the_logical_screen_descriptor() -> None:
+    record = _record(1)
+    record["media"]["mime_type"] = "image/gif"  # type: ignore[index]
+
+    def fetch(url, _context, _max_bytes):
+        return BinaryResponse(GIF_1_BY_1, "image/gif", url)
+
+    downloaded, _ = download_resolved_record(
+        record, context=None, max_bytes=1024, fetch_binary=fetch
+    )
+
+    # Commons serves GIF sources as GIF even at thumbnail sizes.
+    assert downloaded["mime_type"] == "image/gif"
+    assert (downloaded["width"], downloaded["height"]) == (1, 1)
+    assert downloaded["local_path"].endswith(".gif")
+
+
+def test_still_rejects_a_thumbnail_whose_bytes_belie_its_content_type() -> None:
+    record = _record(1)
+    record["media"]["mime_type"] = "image/tiff"  # type: ignore[index]
+
+    def fetch(url, _context, _max_bytes):
+        return BinaryResponse(PNG_1_BY_1, "image/jpeg", url)
+
+    with pytest.raises(WikimediaDownloadError, match="signature and response"):
+        download_resolved_record(
+            record, context=None, max_bytes=1024, fetch_binary=fetch
         )

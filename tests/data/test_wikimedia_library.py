@@ -3,7 +3,10 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from phylogenomica.data.wikimedia_download import BinaryResponse
+from phylogenomica.data.wikimedia_download import (
+    BinaryResponse,
+    WikimediaDownloadError,
+)
 from phylogenomica.data.wikimedia_library import (
     load_wikimedia_library,
     update_wikimedia_library,
@@ -217,3 +220,66 @@ def test_can_prioritize_a_species_subset_from_a_resolver_manifest(
     assert requested == ["https://upload.example/2.png?width=512"]
     assert manifest["record_count"] == 1
     assert manifest["records"][0]["species_id"] == 2
+
+
+def test_one_unusable_file_does_not_discard_the_rest_of_a_batch(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "library"
+    resolver = tmp_path / "resolver.json"
+    _write_resolver_manifest(
+        resolver,
+        [_resolver_record(1), _resolver_record(2), _resolver_record(3)],
+    )
+
+    def fetch(url, _context, _max_bytes):
+        # The middle species is served something undecodable, as a TIFF or an
+        # error page would be. It must cost only itself.
+        if "/2." in url:
+            return BinaryResponse(b"not an image at all", "image/png", url)
+        return BinaryResponse(PNG_1_BY_1, "image/png", url)
+
+    manifest_path, manifest = update_wikimedia_library(
+        resolver, library_root=root, fetch_binary=fetch
+    )
+
+    assert manifest["record_count"] == 2
+    update = manifest["last_update"]
+    assert update["downloaded_count"] == 2
+    assert update["failed_count"] == 1
+    assert [f["species_id"] for f in update["failed_species"]] == [2]
+    assert "not a supported" in str(update["failed_species"][0]["reason"])
+    # The manifest and every good file must still be on disk.
+    library = load_wikimedia_library(manifest_path)
+    assert sorted(library.assets) == [1, 3]
+    assert library.assets[1].path.read_bytes() == PNG_1_BY_1
+
+
+def test_a_failed_species_is_retried_on_the_next_update(tmp_path: Path) -> None:
+    root = tmp_path / "library"
+    resolver = tmp_path / "resolver.json"
+    _write_resolver_manifest(resolver, [_resolver_record(1), _resolver_record(2)])
+    attempts: list[str] = []
+
+    def failing(url, _context, _max_bytes):
+        attempts.append(url)
+        if "/2." in url:
+            raise WikimediaDownloadError("transient network failure")
+        return BinaryResponse(PNG_1_BY_1, "image/png", url)
+
+    _, first = update_wikimedia_library(
+        resolver, library_root=root, fetch_binary=failing
+    )
+    assert first["last_update"]["failed_count"] == 1
+
+    def recovered(url, _context, _max_bytes):
+        return BinaryResponse(PNG_1_BY_1, "image/png", url)
+
+    manifest_path, second = update_wikimedia_library(
+        resolver, library_root=root, fetch_binary=recovered
+    )
+
+    # Nothing was recorded for the failure, so the next pass simply retries it.
+    assert second["last_update"]["downloaded_count"] == 1
+    assert second["last_update"]["reused_count"] == 1
+    assert sorted(load_wikimedia_library(manifest_path).assets) == [1, 2]

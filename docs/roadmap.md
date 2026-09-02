@@ -299,7 +299,9 @@ dataset-wide media request.
 - Add ID-based Wikidata/Wikipedia fallbacks only where useful.
 - Improve image choice and attribution presentation.
 - Improve vernacular-name handling.
-- Optionally add post-game descriptions.
+- ~~Optionally add post-game descriptions.~~ Implemented as species
+  descriptions throughout: the endgame summary, the cards, and the hover
+  detail on any species in the tree.
 
 The first implementation increment is a reproducible, resumable metadata-only
 resolver:
@@ -340,10 +342,21 @@ resolver:
    downloads, atomically refreshes local media, polls stage-scoped progress,
    and keeps gameplay operational on network or rights failures. Subset
    resolver manifests cannot overwrite full-game audit manifests.
+10. ~~Add English Wikipedia species descriptions over the same Wikidata
+    bridge.~~ Description resolver version 1 batches `enwiki` sitelinks, reads
+    each article's lead section with `exintro` and `explaintext`, follows
+    normalization and redirects, and records page and revision IDs, the
+    canonical URL, and the CC BY-SA 4.0 licence. An inline dataset-level
+    description library and a second opt-in background worker mirror the media
+    pair. The live human/seed-42 run resolved 42 of 50 species: two carry no
+    Wikidata ID and six have no English sitelink.
 
 Missing Wikidata IDs, missing `P18`, missing Commons pages, unsupported media,
 and incomplete attribution must remain distinct unresolved outcomes. The
-resolver must not silently fall back to a name search.
+resolver must not silently fall back to a name search. The description resolver
+keeps the same discipline: a missing English sitelink, a missing article, and
+an empty extract stay distinct, and no genus or family article is ever
+substituted for an absent species article.
 
 The human/seed-42 pilot contains 48 Wikidata-linked species and two explicit
 missing-ID records (`Brucella abortus NCTC 8038` and `Escherichia coli
@@ -352,6 +365,11 @@ missing-ID records (`Brucella abortus NCTC 8038` and `Escherichia coli
 46 species, but three lack creator/credit. Resolver version 2 preserves the
 tracking query strings and reports usable original and thumbnail URLs for all
 46.
+
+Wikidata folds Query Service lag into `maxlag`, so both resolvers omit that
+parameter on entity reads and keep it on Commons and Wikipedia reads, where it
+means ordinary replica lag. Both share one bounded backoff. See
+`data_sources.md`.
 
 Deliverable: richer cards without changing topology or answer semantics.
 

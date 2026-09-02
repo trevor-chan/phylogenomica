@@ -432,6 +432,7 @@ def update_wikimedia_library(
     pending_files: list[tuple[Path, bytes]] = []
     counts: Counter[str] = Counter()
     blocked_species: list[int] = []
+    failed_species: list[dict[str, object]] = []
     for raw_record in selected:
         species_id = raw_record.get("species_id")
         if not isinstance(species_id, int) or species_id <= 0:
@@ -468,7 +469,12 @@ def update_wikimedia_library(
                 )
                 action = "imported"
         except WikimediaDownloadError as error:
-            raise WikimediaLibraryError(str(error)) from error
+            # One unusable file must not discard the whole batch. A download
+            # failure is a per-species outcome like blocked rights: record it,
+            # skip it, and keep every other species in this update.
+            counts["failed"] += 1
+            failed_species.append({"species_id": species_id, "reason": str(error)})
+            continue
         rights = classify_rights(downloaded)
         if not rights["working_use_allowed"]:
             counts["blocked"] += 1
@@ -529,6 +535,8 @@ def update_wikimedia_library(
             "reused_count": counts["reused"],
             "blocked_count": counts["blocked"],
             "blocked_species_ids": blocked_species,
+            "failed_count": counts["failed"],
+            "failed_species": failed_species,
             "unresolved_status_counts": dict(sorted(unresolved.items())),
             "invalidated_prior_species_ids": sorted(invalid_prior),
         },
@@ -597,8 +605,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         f"wrote {manifest_path} ({manifest['record_count']} total; "
         f"downloaded={update['downloaded_count']}, "
         f"imported={update['imported_count']}, reused={update['reused_count']}, "
-        f"blocked={update['blocked_count']})"
+        f"blocked={update['blocked_count']}, failed={update['failed_count']})"
     )
+    for failure in update["failed_species"]:
+        print(f"  failed {failure['species_id']}: {failure['reason']}")
 
 
 if __name__ == "__main__":

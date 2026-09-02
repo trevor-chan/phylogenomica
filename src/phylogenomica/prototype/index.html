@@ -164,6 +164,58 @@
     border: 1px solid var(--good); background: var(--panel); color: var(--ink);
     font: inherit; font-weight: 600; cursor: pointer;
   }
+
+  /* The completion summary takes over the tray: there are no cards left to
+     deal, so the space belongs to what the target actually was. */
+  .summary {
+    flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column;
+    gap: .3rem; padding: .5rem .75rem; border: 1px solid var(--line);
+    border-radius: .45rem; background: var(--bg);
+    max-height: 11.5rem; overflow-y: auto;
+  }
+  .summary h2 { margin: 0; font-size: .95rem; font-weight: 700; }
+  .summary h2 em {
+    font-style: italic; font-weight: 400; color: var(--muted); font-size: .82rem;
+  }
+  .summary .blurb { margin: 0; font-size: .82rem; line-height: 1.4; }
+  .summary .pending { margin: 0; font-size: .82rem; color: var(--muted); font-style: italic; }
+  .source { font-size: .64rem; color: var(--muted); line-height: 1.3; }
+  .source a { color: var(--accent); }
+  .again.final {
+    flex: 0 0 auto; align-self: stretch; width: 9.5rem; margin-left: .1rem;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: .15rem; font-weight: 700;
+  }
+  .again.final small {
+    font-weight: 400; font-size: .68rem; color: var(--muted);
+    letter-spacing: .04em; text-transform: uppercase;
+  }
+
+  /* Hover detail: an enlarged look at any species already on screen. It never
+     takes pointer events, so it can overlap a card without blocking the click. */
+  #detail {
+    position: fixed; z-index: 20; width: 22rem; max-width: calc(100vw - 1.5rem);
+    padding: .6rem; border: 1px solid var(--line); border-radius: .5rem;
+    background: var(--panel); box-shadow: 0 12px 30px rgba(0, 0, 0, .4);
+    pointer-events: none; display: flex; gap: .6rem;
+  }
+  #detail[hidden] { display: none; }
+  #detail .shot {
+    flex: 0 0 7.5rem; width: 7.5rem; aspect-ratio: 4 / 3; border-radius: .35rem;
+    overflow: hidden; background: linear-gradient(160deg, var(--line), var(--panel));
+    display: grid; place-items: center; font-size: 1.7rem; color: var(--muted);
+  }
+  #detail .shot img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  #detail .body { flex: 1 1 auto; min-width: 0; }
+  #detail .en { font-size: .9rem; }
+  #detail .sci { margin-bottom: .3rem; }
+  #detail .blurb {
+    font-size: .76rem; line-height: 1.36;
+    display: -webkit-box; -webkit-line-clamp: 7; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  #detail .pending { font-size: .76rem; font-style: italic; color: var(--muted); }
+  #detail .source { margin-top: .3rem; }
 </style>
 </head>
 <body>
@@ -208,14 +260,21 @@
   </div>
 </footer>
 
+<div id="detail" hidden></div>
+
 <script>
 const $ = (id) => document.getElementById(id);
 const NS = "http://www.w3.org/2000/svg";
 const MIN_TREE_WIDTH = 720, LABEL_WIDTH = 250;
 const BRANCH_LEFT = 72, TREE_TOP = 50, TREE_BOTTOM = 44;
 const HISTORY_STAGE_WIDTH = 152;
+// A completed tree is read, not played: every stage gets room for its own
+// labels, and the board scrolls rather than compressing them away.
+const EXPANDED_STAGE_WIDTH = 200, EXPANDED_LEAF_HEIGHT = 30;
+const DETAIL_DELAY = 320;
 let scale = 1, follow = true, busy = false;
 let currentView = null, resizeTimer = null, mediaTimer = null;
+let detailTimer = null, detailIndex = new Map(), expandedOnce = false;
 
 function el(name, attrs = {}) {
   const node = document.createElementNS(NS, name);
@@ -279,12 +338,28 @@ function renderTree(view) {
   const targets = view.lineage.flatMap((stage) => stage.target);
   const target = targets.length ? targets[0] : null;
   const focusStage = view.completed ? view.stage_count - 1 : view.stage_index;
-  const width = Math.max(MIN_TREE_WIDTH, host.clientWidth || MIN_TREE_WIDTH);
-  const height = Math.max(360, host.clientHeight || 520);
+  // A finished game has no next move to focus on, so no stage is history any
+  // more. Every branching event reopens with its name, age, and species.
+  const expanded = Boolean(view.completed);
+  const leafCount =
+    tiers.reduce((total, tier) => total + tier.slotCount, 0) + 1;
+  const width = Math.max(
+    MIN_TREE_WIDTH,
+    host.clientWidth || MIN_TREE_WIDTH,
+    expanded
+      ? BRANCH_LEFT + (focusStage + 1) * EXPANDED_STAGE_WIDTH + LABEL_WIDTH
+      : 0,
+  );
+  const height = Math.max(
+    360,
+    expanded
+      ? TREE_TOP + TREE_BOTTOM + leafCount * EXPANDED_LEAF_HEIGHT
+      : host.clientHeight || 520,
+  );
   const leafX = width - LABEL_WIDTH;
   const branchRight = leafX - 38;
   const branchWidth = branchRight - BRANCH_LEFT;
-  const historyStageCount = focusStage;
+  const historyStageCount = expanded ? 0 : focusStage;
   const historyWidth = historyStageCount
     ? Math.min(branchWidth * 0.68, historyStageCount * HISTORY_STAGE_WIDTH)
     : 0;
@@ -313,7 +388,9 @@ function renderTree(view) {
   const stageBands = [];
   let stageStart = BRANCH_LEFT;
   for (let stage = 0; stage <= focusStage; stage++) {
-    const stageWidth = stage < focusStage ? historyStageWidth : focusWidth;
+    const stageWidth = expanded
+      ? branchWidth / (focusStage + 1)
+      : stage < focusStage ? historyStageWidth : focusWidth;
     const stageTiers = layout.filter((tier) => tier.stage === stage);
     stageTiers.forEach((tier, index) => {
       tier.x = stageStart + stageWidth * (index + 1) / (stageTiers.length + 1);
@@ -325,12 +402,12 @@ function renderTree(view) {
   // Terminal leaves share one right-hand boundary. Historical species occupy
   // a shallow compressed band; the focus stage gets the remaining height and
   // readable labels.
-  const historyLeaves = layout
-    .filter((tier) => tier.stage < focusStage)
-    .flatMap((tier) => tier.leaves);
-  const focusLeaves = layout
-    .filter((tier) => tier.stage === focusStage)
-    .flatMap((tier) => tier.leaves);
+  const historyLeaves = expanded
+    ? []
+    : layout.filter((tier) => tier.stage < focusStage).flatMap((t) => t.leaves);
+  const focusLeaves = expanded
+    ? layout.flatMap((tier) => tier.leaves)
+    : layout.filter((tier) => tier.stage === focusStage).flatMap((t) => t.leaves);
   const endpoint = { y: 0 };
   const historyEnd = historyLeaves.length
     ? Math.min(TREE_TOP + height * 0.36, height - TREE_BOTTOM - 150)
@@ -396,7 +473,7 @@ function renderTree(view) {
       // An age on an empty event is dated but unidentified: keep it visibly
       // provisional so it never reads as a placed relative's own label.
       const classes = ["tierlabel"];
-      if (tier.stage < focusStage) classes.push("history");
+      if (!expanded && tier.stage < focusStage) classes.push("history");
       if (!tier.populated) classes.push("pending");
       const labelNode = text(
         tier.x + 7, tier.nodeY - 7, fit(fullLabel, 180, 5.8),
@@ -406,6 +483,7 @@ function renderTree(view) {
       svg.appendChild(labelNode);
     }
 
+    const labelled = expanded || tier.stage === focusStage;
     tier.leaves.forEach(({ species, y }) => {
       svg.appendChild(el("line", {
         x1: tier.x, y1: y, x2: leafX, y2: y,
@@ -413,17 +491,16 @@ function renderTree(view) {
       }));
       if (!species) {
         svg.appendChild(el("circle", {
-          cx: leafX, cy: y, r: tier.stage < focusStage ? 2.5 : 4,
-          class: "tip unknown-tip",
+          cx: leafX, cy: y, r: labelled ? 4 : 2.5, class: "tip unknown-tip",
         }));
         return;
       }
       svg.appendChild(el("circle", {
-        cx: leafX, cy: y, r: tier.stage < focusStage ? 2.5 : 4,
+        cx: leafX, cy: y, r: labelled ? 4 : 2.5,
         class: `tip ${species.placement}${species.role === "target" ? " target" : ""}`,
       }));
-      if (tier.stage === focusStage) appendLeafLabel(svg, leafX, y, species);
-      else appendLeafTitle(svg, leafX, y, species);
+      if (labelled) appendLeafLabel(svg, leafX, y, species);
+      else appendLeafHit(svg, leafX, y, species);
     });
 
     // The continuing child is the next nested branching event. The last one
@@ -454,6 +531,7 @@ function renderTree(view) {
       cx: leafX, cy: endpoint.y, r: 6, class: "tip target pending",
     }));
     appendLeafLabel(svg, leafX, endpoint.y, {
+      species_id: view.target.species_id,
       english_name: view.target.english_name,
       scientific_name: view.target.scientific_name,
       role: "target",
@@ -481,19 +559,24 @@ function distributeLeaves(leaves, start, end) {
   });
 }
 
+// Leaf labels open the same detail popup the cards do, so a name in the tree
+// is a way back to the animal rather than a dead end. The native title is
+// deliberately absent: it would race the popup with a second tooltip.
 function appendLeafLabel(svg, x, y, species) {
-  const en = text(x + 10, y - 2, fit(species.english_name, 225, 6.3), `en ${species.role}`);
-  en.appendChild(el("title")).textContent =
-    `${species.english_name} — ${species.role}, ${species.placement}`;
+  const en = text(x + 10, y - 2, fit(species.english_name, 225, 6.3),
+    `en ${species.role} leaf`);
+  const sci = text(x + 10, y + 11, fit(species.scientific_name, 225, 5.7),
+    "sci leaf");
   svg.appendChild(en);
-  svg.appendChild(text(x + 10, y + 11, fit(species.scientific_name, 225, 5.7), "sci"));
+  svg.appendChild(sci);
+  attachDetail(en, species);
+  attachDetail(sci, species);
 }
 
-function appendLeafTitle(svg, x, y, species) {
+function appendLeafHit(svg, x, y, species) {
   const hit = el("circle", { cx: x, cy: y, r: 7, class: "history-hit" });
-  hit.appendChild(el("title")).textContent =
-    `${species.english_name} — ${species.scientific_name}`;
   svg.appendChild(hit);
+  attachDetail(hit, species);
 }
 
 function styleBlock() {
@@ -510,7 +593,8 @@ function styleBlock() {
     /* Named but not yet reached: the endpoint is known, the path is not. */
     .tip.target.pending { fill: var(--bg); stroke-dasharray: 3 2; }
     .tip.unknown-tip { fill: var(--bg); stroke-dasharray: 2 2; }
-    .history-hit { fill: transparent; stroke: none; }
+    .history-hit { fill: transparent; stroke: none; cursor: help; }
+    .leaf { cursor: help; }
     .stage-bracket { stroke: var(--line); stroke-width: 1.2; }
     .stage-bracket.active { stroke: var(--accent); stroke-width: 2; }
     text { font: 11.5px var(--font); fill: var(--ink); }
@@ -541,6 +625,122 @@ function applyScale() {
     $("stage-tree").scrollLeft = $("stage-tree").scrollWidth;
     $("stage-tree").scrollTop = $("stage-tree").scrollHeight;
   }
+}
+
+// Every species already on screen — dealt cards, the revealed target, and
+// every leaf in the tree — is described in one index the popup reads from.
+// Cards and lineage entries describe the same species from different angles,
+// so neither may erase what the other supplied.
+function buildDetailIndex(view) {
+  const index = new Map();
+  const add = (entry) => {
+    if (!entry || entry.species_id === null || entry.species_id === undefined) return;
+    const merged = { ...(index.get(entry.species_id) || {}) };
+    for (const [key, value] of Object.entries(entry)) {
+      if (value !== null && value !== undefined) merged[key] = value;
+    }
+    index.set(entry.species_id, merged);
+  };
+  for (const stage of view.lineage || []) {
+    for (const tier of stage.tiers) for (const species of tier.species) add(species);
+    for (const placed of stage.target) add(placed);
+  }
+  for (const card of view.cards || []) add(card);
+  add(view.target);
+  return index;
+}
+
+// Article text and image carry separate licences, so both credits travel with
+// the species wherever it is shown.
+function sourceLine(entry) {
+  const parts = [];
+  if (entry.description && entry.description.attribution) {
+    parts.push(entry.description.attribution);
+  }
+  const image = entry.image_attribution && entry.image_attribution.text;
+  if (image) parts.push(`Image: ${image}`);
+  else if (entry.rights) parts.push(`Image: ${entry.rights}`);
+  return parts.join(" · ");
+}
+
+function renderDetail(entry) {
+  const box = $("detail");
+  box.innerHTML = "";
+  const shot = document.createElement("div");
+  shot.className = "shot";
+  if (entry.image_url) {
+    const img = document.createElement("img");
+    img.alt = "";
+    img.src = entry.image_url;
+    img.onerror = () => { shot.textContent = "🧬"; };
+    shot.appendChild(img);
+  } else {
+    shot.textContent = "🧬";
+  }
+  const body = document.createElement("div");
+  body.className = "body";
+  const en = document.createElement("div");
+  en.className = "en";
+  en.textContent = entry.english_name || "";
+  const sci = document.createElement("div");
+  sci.className = "sci";
+  sci.textContent = entry.scientific_name || "";
+  const blurb = document.createElement("div");
+  if (entry.description && entry.description.text) {
+    blurb.className = "blurb";
+    blurb.textContent = entry.description.text;
+  } else {
+    blurb.className = "pending";
+    blurb.textContent = "No description available for this species yet.";
+  }
+  body.append(en, sci, blurb);
+  const source = sourceLine(entry);
+  if (source) {
+    const credit = document.createElement("div");
+    credit.className = "source";
+    credit.textContent = source;
+    body.appendChild(credit);
+  }
+  box.append(shot, body);
+}
+
+function placeDetail(anchor) {
+  const box = $("detail");
+  const rect = anchor.getBoundingClientRect();
+  const margin = 10;
+  const width = box.offsetWidth, height = box.offsetHeight;
+  let top = rect.top - height - margin;
+  if (top < margin) top = rect.bottom + margin;
+  top = Math.max(margin, Math.min(top, window.innerHeight - height - margin));
+  let left = rect.left + rect.width / 2 - width / 2;
+  left = Math.max(margin, Math.min(left, window.innerWidth - width - margin));
+  box.style.top = `${top}px`;
+  box.style.left = `${left}px`;
+}
+
+function hideDetail() {
+  clearTimeout(detailTimer);
+  detailTimer = null;
+  $("detail").hidden = true;
+}
+
+// Hovering is a lingering gesture, not a click: wait before interrupting the
+// board with a popup, and drop it the moment the pointer leaves.
+function attachDetail(node, species) {
+  const speciesId = species && species.species_id;
+  if (speciesId === null || speciesId === undefined) return;
+  const open = () => {
+    renderDetail(detailIndex.get(speciesId) || species);
+    $("detail").hidden = false;
+    placeDetail(node);
+  };
+  node.addEventListener("mouseenter", () => {
+    clearTimeout(detailTimer);
+    detailTimer = setTimeout(open, DETAIL_DELAY);
+  });
+  node.addEventListener("mouseleave", hideDetail);
+  node.addEventListener("focus", open);
+  node.addEventListener("blur", hideDetail);
 }
 
 function cardNode(card) {
@@ -591,8 +791,7 @@ function cardNode(card) {
     meta.appendChild(credit);
   }
   node.append(thumb, meta);
-  node.title = `${card.english_name} — ${card.scientific_name}` +
-    (card.image_attribution ? `\n\n${card.image_attribution.text}` : "");
+  attachDetail(node, card);
   if (card.selectable) node.onclick = () => guess(card.species_id);
   return node;
 }
@@ -611,6 +810,64 @@ function renderTargetPanel(view) {
   panel.append(label, cardNode(view.target));
 }
 
+// A finished game has no cards left to deal, so the tray becomes the answer:
+// the target on the left, what it actually is in the middle, and the way out
+// on the right.
+function renderSummary(view) {
+  const cards = $("cards");
+  const target = view.target;
+  const summary = document.createElement("div");
+  summary.className = "summary";
+  const heading = document.createElement("h2");
+  if (target) {
+    heading.textContent = `${target.english_name} `;
+    const sci = document.createElement("em");
+    sci.textContent = target.scientific_name;
+    heading.appendChild(sci);
+  } else {
+    heading.textContent = "Lineage complete";
+  }
+  summary.appendChild(heading);
+
+  const description = target && target.description;
+  const blurb = document.createElement("div");
+  if (description && description.text) {
+    blurb.className = "blurb";
+    blurb.textContent = description.text;
+  } else {
+    blurb.className = "pending";
+    blurb.textContent =
+      "No Wikipedia description has been fetched for this species yet.";
+  }
+  summary.appendChild(blurb);
+
+  if (description) {
+    const credit = document.createElement("div");
+    credit.className = "source";
+    credit.textContent = description.attribution;
+    if (description.url) {
+      credit.append(" — ");
+      const link = document.createElement("a");
+      link.href = description.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "read on Wikipedia";
+      credit.appendChild(link);
+    }
+    summary.appendChild(credit);
+  }
+  cards.appendChild(summary);
+
+  const again = document.createElement("button");
+  again.className = "again final";
+  again.append("Play again");
+  const note = document.createElement("small");
+  note.textContent = `${view.score} / ${view.maximum}`;
+  again.appendChild(note);
+  again.onclick = playAgain;
+  cards.appendChild(again);
+}
+
 function renderDifficulty(view) {
   for (const button of document.querySelectorAll(".difficulty button")) {
     button.setAttribute(
@@ -627,6 +884,8 @@ function openingPrompt(view) {
 
 function render(view, outcome) {
   currentView = view;
+  detailIndex = buildDetailIndex(view);
+  hideDetail();
   renderDifficulty(view);
   renderTargetPanel(view);
   $("score").textContent = `${view.score}/${view.maximum}`;
@@ -643,20 +902,29 @@ function render(view, outcome) {
   for (const card of view.cards) {
     cards.appendChild(cardNode(card));
   }
-  if (view.completed) {
-    const again = document.createElement("button");
-    again.className = "again";
-    again.textContent = "Play again";
-    again.onclick = playAgain;
-    cards.appendChild(again);
-  }
+  if (view.completed) renderSummary(view);
 
+  // Reopening the whole tree is a change of mode, not a redraw: reset the
+  // viewport once, then leave the player's zoom and scroll alone.
+  const reopening = view.completed && !expandedOnce;
+  if (reopening) {
+    expandedOnce = true;
+    follow = false;
+    scale = 1;
+    $("follow").setAttribute("aria-pressed", "false");
+  }
   renderTree(view);
+  if (reopening) {
+    $("stage-tree").scrollTop = 0;
+    $("stage-tree").scrollLeft = 0;
+  }
   updateMediaStatus(view);
   if (outcome) describe(outcome, view);
   else if (view.completed) {
     $("feedback").className = "good";
-    $("feedback").textContent = `Final score ${view.score} of ${view.maximum}.`;
+    $("feedback").textContent =
+      `Final score ${view.score} of ${view.maximum}. The whole lineage is ` +
+      "open above — hover any name for its picture and description.";
   } else if (view.reviewing_stage) {
     const stageScore = view.stage_scores[view.stage_scores.length - 1];
     $("feedback").className = "good";
@@ -677,27 +945,46 @@ function appendContinue(view) {
   box.appendChild(button);
 }
 
+const ACTIVITY = {
+  queued: "queued",
+  resolving: "finding sources…",
+  downloading: "downloading…",
+  error: "failed",
+};
+
+function isFetching(status) {
+  return ["queued", "resolving", "downloading"].includes(status.state);
+}
+
+function statusPart(label, status) {
+  const count = `${label} ${status.available_count}/${status.total_count}`;
+  const activity = ACTIVITY[status.state];
+  return activity ? `${count} ${activity}` : count;
+}
+
+// Images and descriptions are fetched by independent workers, so the header
+// reports whichever of them is still running.
 function updateMediaStatus(view) {
   const box = $("media-status");
-  const media = view.media_download;
   clearTimeout(mediaTimer);
   mediaTimer = null;
-  if (!media || !media.enabled || media.total_count === 0) {
+  const parts = [];
+  let fetching = false;
+  for (const [label, status] of [
+    ["images", view.media_download],
+    ["text", view.description_download],
+  ]) {
+    if (!status || !status.enabled || status.total_count === 0) continue;
+    parts.push(statusPart(label, status));
+    fetching = fetching || isFetching(status);
+  }
+  if (!parts.length) {
     box.hidden = true;
     return;
   }
   box.hidden = false;
-  const count = `images ${media.available_count}/${media.total_count}`;
-  const activity = {
-    queued: "queued",
-    resolving: "finding sources…",
-    downloading: "downloading…",
-    error: "download failed",
-  }[media.state];
-  box.textContent = activity ? `${count} · ${activity}` : count;
-  if (["queued", "resolving", "downloading"].includes(media.state)) {
-    mediaTimer = setTimeout(refreshMedia, 1000);
-  }
+  box.textContent = parts.join(" · ");
+  if (fetching) mediaTimer = setTimeout(refreshMedia, 1000);
 }
 
 async function refreshMedia() {
@@ -709,14 +996,17 @@ async function refreshMedia() {
     const res = await fetch("/api/view");
     if (!res.ok) return;
     const view = await res.json();
-    const previous = currentView && currentView.media_download;
-    const next = view.media_download;
-    const imagesChanged = !previous || !next ||
-      previous.revision !== next.revision ||
-      previous.available_count !== next.available_count;
-    if (imagesChanged) render(view);
+    const changed = ["media_download", "description_download"].some((key) => {
+      const previous = currentView && currentView[key];
+      const next = view[key];
+      if (!previous || !next) return Boolean(previous) !== Boolean(next);
+      return previous.revision !== next.revision ||
+        previous.available_count !== next.available_count;
+    });
+    if (changed) render(view);
     else {
-      currentView.media_download = next;
+      currentView.media_download = view.media_download;
+      currentView.description_download = view.description_download;
       updateMediaStatus(currentView);
     }
   } catch (_) {
@@ -792,6 +1082,7 @@ async function playAgain() {
     if (!res.ok) { $("feedback").textContent = data.error; return; }
     scale = 1;
     follow = true;
+    expandedOnce = false;
     $("follow").setAttribute("aria-pressed", "true");
     render(data.view);
     $("feedback").className = "";
@@ -824,6 +1115,7 @@ async function setDifficulty(difficulty) {
     if (!res.ok) { $("feedback").textContent = data.error; return; }
     scale = 1;
     follow = true;
+    expandedOnce = false;
     $("follow").setAttribute("aria-pressed", "true");
     render(data.view);
     $("feedback").className = "";
