@@ -74,6 +74,7 @@ class PrototypeSession:
     game: GeneratedGame
     state: GameState
     next_game: Callable[[GeneratedGame], GeneratedGame]
+    review_stage_index: int | None = None
 
     @classmethod
     def start(
@@ -86,9 +87,19 @@ class PrototypeSession:
     def play_again(self) -> None:
         self.game = self.next_game(self.game)
         self.state = initial_state(self.game)
+        self.review_stage_index = None
+
+    def continue_stage(self) -> None:
+        if self.review_stage_index is None:
+            raise GameplayError("there is no completed stage to continue")
+        self.review_stage_index = None
 
     def guess(self, species_id: int) -> GuessOutcome:
+        if self.review_stage_index is not None:
+            raise GameplayError("continue to the next stage before guessing")
         self.state, outcome = apply_guess(self.game, self.state, species_id)
+        if outcome.stage_completed and not outcome.game_completed:
+            self.review_stage_index = outcome.stage_index
         return outcome
 
 
@@ -136,7 +147,11 @@ def _card(
     return payload
 
 
-def _lineage(game: GeneratedGame, state: GameState) -> list[dict[str, object]]:
+def _lineage(
+    game: GeneratedGame,
+    state: GameState,
+    final_visible_stage: int | None = None,
+) -> list[dict[str, object]]:
     """Render placed species into fixed anonymous slots, root to target."""
     members = _members_by_id(game)
     placements: dict[tuple[int, int | None], list[PlacedSpecies]] = {}
@@ -145,9 +160,10 @@ def _lineage(game: GeneratedGame, state: GameState) -> list[dict[str, object]]:
             placed
         )
 
-    final_visible_stage = (
-        len(game.stages) - 1 if state.completed else state.current_stage_index
-    )
+    if final_visible_stage is None:
+        final_visible_stage = (
+            len(game.stages) - 1 if state.completed else state.current_stage_index
+        )
     lineage: list[dict[str, object]] = []
     for stage in game.stages[: final_visible_stage + 1]:
         rendered_tiers: list[dict[str, object]] = []
@@ -211,10 +227,20 @@ def build_view(
     game: GeneratedGame,
     state: GameState,
     media_library: WikimediaLibrary | None = None,
+    review_stage_index: int | None = None,
 ) -> dict[str, object]:
     """Render everything the page may know at this moment."""
     placed_by_id = {placed.species_id: placed for placed in state.placements}
-    open_stage = None if state.completed else game.stages[state.current_stage_index]
+    visible_stage_index = (
+        review_stage_index
+        if review_stage_index is not None
+        else state.current_stage_index
+    )
+    open_stage = (
+        None
+        if state.completed
+        else game.stages[visible_stage_index]
+    )
     cards = (
         []
         if open_stage is None
@@ -228,7 +254,7 @@ def build_view(
         ]
     )
     return {
-        "stage_index": state.current_stage_index,
+        "stage_index": visible_stage_index,
         "stage_count": len(game.stages),
         "is_ultimate": (
             open_stage is not None
@@ -236,12 +262,15 @@ def build_view(
         ),
         "cards": cards,
         "score": score(game, state),
-        "stage_at_stake": stage_at_stake(game, state),
+        "stage_at_stake": (
+            0 if review_stage_index is not None else stage_at_stake(game, state)
+        ),
         "best_achievable": best_achievable_score(game, state),
         "maximum": maximum_score(game),
         "stage_scores": list(state.stage_scores),
         "completed": state.completed,
-        "lineage": _lineage(game, state),
+        "reviewing_stage": review_stage_index is not None,
+        "lineage": _lineage(game, state, review_stage_index),
     }
 
 
@@ -285,11 +314,12 @@ class _Handler(BaseHTTPRequestHandler):
             self._session.game,
             self._session.state,
             self._media_library,
+            self._session.review_stage_index,
         )
         if self._media_downloader is not None:
             view["media_download"] = self._media_downloader.player_status(
                 self._session.game,
-                self._session.state.current_stage_index,
+                int(view["stage_index"]),
             )
         return view
 
@@ -338,6 +368,14 @@ class _Handler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": "not found"})
 
     def do_POST(self) -> None:  # noqa: N802 - http.server API
+        if self.path == "/api/continue":
+            try:
+                self._session.continue_stage()
+            except GameplayError as error:
+                self._send_json(409, {"error": str(error)})
+                return
+            self._send_json(200, {"view": self._view()})
+            return
         if self.path == "/api/play-again":
             try:
                 self._session.play_again()

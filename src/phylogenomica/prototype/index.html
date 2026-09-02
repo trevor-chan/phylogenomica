@@ -97,14 +97,27 @@
     transition: border-color .12s, transform .12s;
   }
   .card:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-2px); }
-  .card:disabled { cursor: default; opacity: .4; }
+  .card:disabled { cursor: default; }
+  .card.guessed, .card.revealed {
+    background: var(--panel); border-color: var(--faint); color: var(--muted);
+    filter: grayscale(1); opacity: .62;
+  }
+  .card.guessed .thumb img, .card.revealed .thumb img {
+    filter: grayscale(1) contrast(.65); opacity: .38;
+  }
   .thumb {
     flex: 0 0 auto; width: 100%; aspect-ratio: 4 / 3;
-    border-radius: .3rem; overflow: hidden;
+    position: relative; border-radius: .3rem; overflow: hidden;
     background: linear-gradient(160deg, var(--line), var(--panel));
     display: grid; place-items: center; font-size: 2rem; color: var(--muted);
   }
   .thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .state-badge {
+    position: absolute; inset: auto .3rem .3rem; padding: .16rem .25rem;
+    border-radius: .2rem; background: rgba(20, 24, 30, .82); color: #d8dce2;
+    font-size: .58rem; font-weight: 700; letter-spacing: .08em;
+    text-align: center; text-transform: uppercase;
+  }
   .en { font-weight: 600; font-size: .85rem; line-height: 1.2; }
   .sci { font-style: italic; color: var(--muted); font-size: .74rem; line-height: 1.2; }
   .credit { color: var(--muted); font-size: .62rem; line-height: 1.2; }
@@ -114,6 +127,11 @@
   .again {
     margin-left: .5rem; padding: .45rem .9rem; border-radius: .4rem; cursor: pointer;
     border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit;
+  }
+  .continue-stage {
+    margin-left: .65rem; padding: .3rem .7rem; border-radius: .35rem;
+    border: 1px solid var(--good); background: var(--panel); color: var(--ink);
+    font: inherit; font-weight: 600; cursor: pointer;
   }
 </style>
 </head>
@@ -463,7 +481,7 @@ function applyScale() {
 
 function cardNode(card) {
   const node = document.createElement("button");
-  node.className = "card";
+  node.className = `card ${card.state}`;
   node.disabled = card.state !== "active" || busy;
 
   const thumb = document.createElement("div");
@@ -477,6 +495,12 @@ function cardNode(card) {
     thumb.appendChild(img);
   } else {
     thumb.textContent = "🧬";
+  }
+  if (card.state !== "active") {
+    const badge = document.createElement("div");
+    badge.className = "state-badge";
+    badge.textContent = card.state;
+    thumb.appendChild(badge);
   }
 
   const meta = document.createElement("div");
@@ -509,7 +533,9 @@ function render(view, outcome) {
   $("best").textContent = `${view.best_achievable}/${view.maximum}`;
   $("stage").textContent = view.completed
     ? "complete"
-    : `stage ${view.stage_index + 1} of ${view.stage_count}`;
+    : view.reviewing_stage
+      ? `stage ${view.stage_index + 1} complete`
+      : `stage ${view.stage_index + 1} of ${view.stage_count}`;
 
   const cards = $("cards");
   cards.innerHTML = "";
@@ -532,7 +558,24 @@ function render(view, outcome) {
   else if (view.completed) {
     $("feedback").className = "good";
     $("feedback").textContent = `Final score ${view.score} of ${view.maximum}.`;
+  } else if (view.reviewing_stage) {
+    const stageScore = view.stage_scores[view.stage_scores.length - 1];
+    $("feedback").className = "good";
+    $("feedback").textContent =
+      `Stage scored ${stageScore}. Review the completed relationships.`;
   }
+  appendContinue(view);
+}
+
+function appendContinue(view) {
+  const box = $("feedback");
+  for (const old of box.querySelectorAll(".continue-stage")) old.remove();
+  if (!view.reviewing_stage) return;
+  const button = document.createElement("button");
+  button.className = "continue-stage";
+  button.textContent = `Continue to stage ${view.stage_index + 2}`;
+  button.onclick = continueStage;
+  box.appendChild(button);
 }
 
 function updateMediaStatus(view) {
@@ -592,7 +635,8 @@ function describe(outcome, view) {
   } else if (outcome.stage_completed) {
     box.classList.add("good");
     box.textContent =
-      `Correct — the deepest branch. Stage scored ${outcome.stage_score}. Descending.`;
+      `Correct — the deepest branch. Stage scored ${outcome.stage_score}. ` +
+      "Review the completed relationships, then continue.";
   } else if (outcome.role === "mulligan") {
     box.classList.add("good");
     box.textContent =
@@ -640,6 +684,21 @@ async function playAgain() {
     render(data.view);
     $("feedback").className = "";
     $("feedback").textContent = "New game.";
+  } finally {
+    busy = false;
+  }
+}
+
+async function continueStage() {
+  if (busy) return;
+  busy = true;
+  try {
+    const res = await fetch("/api/continue", { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) { $("feedback").textContent = data.error; return; }
+    render(data.view);
+    $("feedback").className = "";
+    $("feedback").textContent = "New stage. Find the closest relative.";
   } finally {
     busy = false;
   }

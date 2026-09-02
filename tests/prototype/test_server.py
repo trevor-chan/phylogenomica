@@ -14,7 +14,7 @@ from phylogenomica.data.wikimedia_library import (
     load_wikimedia_library,
 )
 from phylogenomica.data.wikimedia_rights import classify_rights
-from phylogenomica.gameplay.engine import initial_state, replay
+from phylogenomica.gameplay.engine import GameplayError, initial_state, replay
 from phylogenomica.generation.feasibility import FeasibilityConfig
 from phylogenomica.generation.game import (
     GAME_GENERATOR_VERSION,
@@ -220,6 +220,27 @@ def test_shows_the_target_as_a_normal_card_in_the_ultimate_stage() -> None:
     assert target["english_name"] == f"Common {TARGET}"
 
 
+def test_review_view_keeps_the_completed_stage_and_hides_the_next_one() -> None:
+    game = _game()
+    state, _ = replay(game, [UNLOCK])
+
+    view = build_view(game, state, review_stage_index=0)
+
+    assert view["reviewing_stage"] is True
+    assert view["stage_index"] == 0
+    assert view["stage_at_stake"] == 0
+    assert [stage["stage_index"] for stage in view["lineage"]] == [0]
+    assert {card["species_id"] for card in view["cards"]} == {
+        DECOY_A,
+        MULLIGAN_A,
+        UNLOCK,
+    }
+    assert all(card["state"] in {"guessed", "revealed"} for card in view["cards"])
+    assert not ({DECOY_B, MULLIGAN_B, TARGET} & {
+        card["species_id"] for card in view["cards"]
+    })
+
+
 def test_reports_the_growing_cladogram() -> None:
     game = _game()
     state, _ = replay(game, [MULLIGAN_A, UNLOCK, TARGET])
@@ -266,6 +287,37 @@ def test_session_guesses_and_plays_another_seed() -> None:
     assert session.game.game_id == "b" * 64
     assert session.state == initial_state(session.game)
     assert session.state.placements == ()
+
+
+def test_session_requires_continue_after_a_transition_stage() -> None:
+    session = PrototypeSession.start(_game(), _next_game)
+
+    outcome = session.guess(UNLOCK)
+
+    assert outcome.stage_completed is True
+    assert session.state.current_stage_index == 1
+    assert session.review_stage_index == 0
+    with pytest.raises(GameplayError, match="continue"):
+        session.guess(DECOY_B)
+
+    session.continue_stage()
+    assert session.review_stage_index is None
+    assert session.guess(DECOY_B).species_id == DECOY_B
+
+
+def test_session_never_reviews_after_the_final_stage() -> None:
+    session = PrototypeSession.start(_game(), _next_game)
+
+    with pytest.raises(GameplayError, match="no completed stage"):
+        session.continue_stage()
+
+    session.guess(UNLOCK)
+    session.continue_stage()
+    outcome = session.guess(TARGET)
+
+    assert outcome.game_completed is True
+    assert session.review_stage_index is None
+    assert build_view(game=session.game, state=session.state)["completed"] is True
 
 
 def test_background_media_download_prioritizes_the_opening_stage(
@@ -500,6 +552,12 @@ def test_resolves_guesses_over_http(server: str) -> None:
 
     status, payload = _post(server, "/api/guess", {"species_id": UNLOCK})
     assert payload["outcome"]["stage_completed"] is True
+    assert payload["view"]["reviewing_stage"] is True
+    assert payload["view"]["stage_index"] == 0
+
+    status, payload = _post(server, "/api/continue")
+    assert status == 200
+    assert payload["view"]["reviewing_stage"] is False
     assert payload["view"]["stage_index"] == 1
 
     status, payload = _post(server, "/api/play-again")
