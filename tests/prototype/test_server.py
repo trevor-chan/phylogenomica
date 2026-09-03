@@ -120,6 +120,7 @@ def _game() -> GeneratedGame:
         target_id=TARGET,
         seed=7,
         configuration=CONFIG,
+        target_clade_names=("Eukaryota", "Metazoa", "Mammalia"),
         stages=(
             _stage(
                 0,
@@ -164,6 +165,7 @@ def test_serves_only_the_open_stage_and_hides_the_target() -> None:
     # Generation identity includes the target in a deterministic digest. None
     # of it belongs in the player view while the target is concealed.
     assert {"game_id", "dataset_version", "seed", "target_id"}.isdisjoint(view)
+    assert view["attained_title"] is None
 
 
 def test_reserves_anonymous_stage_slots_before_any_species_is_placed() -> None:
@@ -349,6 +351,13 @@ def test_reports_the_growing_cladogram() -> None:
     view = build_view(game, state)
 
     assert view["completed"] is True
+    assert view["attained_title"]["tier"] == "perfect"
+    assert view["attained_title"]["matched_taxon"] in {
+        "Eukaryota",
+        "Animalia",
+        "Mammalia",
+    }
+    assert view["attained_title"]["title"]
     assert view["cards"] == []
     stages = view["lineage"]
     assert [stage["stage_index"] for stage in stages] == [0, 1]
@@ -379,6 +388,7 @@ def test_reports_one_running_score_out_of_the_maximum() -> None:
     finished = build_view(game, state)
     assert finished["score"] == 2
     assert finished["stage_scores"] == [0, 2]
+    assert finished["attained_title"]["tier"] == "excellent"
 
 
 def test_session_guesses_and_plays_another_seed() -> None:
@@ -591,6 +601,7 @@ def test_serves_the_page_and_the_view(server: str) -> None:
     assert b"fill: var(--muted); font-size: 15px; font-style: italic" in page
     assert b'"target clade", "unknown"' in page
     assert b"hidden continuation" not in page
+    assert b"You've attained the title:" in page
 
     status, body = _get(server, "/api/view")
     assert status == 200

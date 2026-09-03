@@ -893,6 +893,12 @@ function openingPrompt(view) {
     : "Pick the closest relative to the hidden target species.";
 }
 
+function attainedTitle(view) {
+  return view.attained_title
+    ? ` You've attained the title: ${view.attained_title.title}.`
+    : "";
+}
+
 function render(view, outcome) {
   currentView = view;
   detailIndex = buildDetailIndex(view);
@@ -934,7 +940,8 @@ function render(view, outcome) {
   else if (view.completed) {
     $("feedback").className = "good";
     $("feedback").textContent =
-      `Final score ${view.score} of ${view.maximum}.`;
+      `Final score ${view.score} of ${view.maximum}.` +
+      attainedTitle(view);
   } else if (view.reviewing_stage) {
     const stageScore = view.stage_scores[view.stage_scores.length - 1];
     $("feedback").className = "good";
@@ -1040,7 +1047,8 @@ function describe(outcome, view) {
       (outcome.role === "target"
         ? "You guessed the target! "
         : "Correct — you found the closest relative. ") +
-      `Your final score is ${view.score} of ${view.maximum}.`;
+      `Your final score is ${view.score} of ${view.maximum}.` +
+      attainedTitle(view);
   } else if (outcome.stage_completed) {
     box.classList.add("good");
     box.textContent =

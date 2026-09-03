@@ -3,5 +3,17 @@
   "dataset_version": null,
   "generator_version": null,
   "source_snapshots": [],
-  "files": []
+  "files": [
+    {
+      "path": "rank_titles.json",
+      "bytes": 25974,
+      "sha256": "7b96fb4060e917b8047b675a7311e10e8335679957cdd649d082a35eec87a98b",
+      "purpose": "Curated endgame rank titles and taxon-to-clade aliases",
+      "source": "Project-curated catalog promoted from assets/raw/rank_titles.json",
+      "source_version": "rank-title-catalog-1",
+      "license": "MIT",
+      "attribution": "Phylogenomica contributors",
+      "build": "Validated and promoted manually; no upstream snapshot required"
+    }
+  ]
 }

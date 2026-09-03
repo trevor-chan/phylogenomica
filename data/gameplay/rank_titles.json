@@ -1,0 +1,1657 @@
+{
+  "schema_version": 1,
+  "catalog_version": 1,
+  "taxon_clade_aliases": {
+    "Animalia": [
+      "Animalia",
+      "Metazoa"
+    ],
+    "Plantae": [
+      "Plantae",
+      "Chloroplastida",
+      "Viridiplantae"
+    ],
+    "Crocodilia": [
+      "Crocodilia",
+      "Crocodylia"
+    ]
+  },
+  "titles": {
+    "Charles Darwin": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "generic",
+        "Animalia"
+      ]
+    },
+    "Carl Linnaeus": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "generic",
+        "Plantae"
+      ]
+    },
+    "E.O. Wilson": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "generic",
+        "Animalia",
+        "Insecta"
+      ]
+    },
+    "Jane Goodall": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "generic",
+        "Animalia",
+        "Mammalia"
+      ]
+    },
+    "David Attenborough": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "generic",
+        "Animalia"
+      ]
+    },
+    "Alexander von Humboldt": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "generic"
+      ]
+    },
+    "Rachel Carson": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "generic"
+      ]
+    },
+    "Alfred Russel Wallace": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "generic",
+        "Animalia"
+      ]
+    },
+    "Dian Fossey": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Animalia",
+        "Mammalia",
+        "Primates"
+      ]
+    },
+    "Jacques Cousteau": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Animalia",
+        "Actinopterygii"
+      ]
+    },
+    "Gerald Durrell": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Animalia"
+      ]
+    },
+    "Gregor Mendel": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Plantae"
+      ]
+    },
+    "Joseph Banks": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Plantae"
+      ]
+    },
+    "Asa Gray": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Plantae"
+      ]
+    },
+    "Luther Burbank": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Plantae"
+      ]
+    },
+    "Paul Stamets": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Fungi"
+      ]
+    },
+    "Beatrix Potter": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Fungi"
+      ]
+    },
+    "Alexander Fleming": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Fungi"
+      ]
+    },
+    "George Schaller": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Mammalia"
+      ]
+    },
+    "John James Audubon": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Aves"
+      ]
+    },
+    "Roger Tory Peterson": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Aves"
+      ]
+    },
+    "David Sibley": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Aves"
+      ]
+    },
+    "Steve Irwin": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Reptilia"
+      ]
+    },
+    "Raymond Ditmars": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Reptilia"
+      ]
+    },
+    "Romulus Whitaker": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Reptilia"
+      ]
+    },
+    "Marvalee Wake": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Amphibia"
+      ]
+    },
+    "David Wake": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Amphibia"
+      ]
+    },
+    "Eugenie Clark": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Actinopterygii"
+      ]
+    },
+    "Sylvia Earle": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Actinopterygii"
+      ]
+    },
+    "Jean-Henri Fabre": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Insecta"
+      ]
+    },
+    "Maria Sibylla Merian": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Insecta",
+        "Arachnida"
+      ]
+    },
+    "Norman Platnick": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Arachnida"
+      ]
+    },
+    "Richard Prum": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Aves"
+      ]
+    },
+    "John Ostrom": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Reptilia",
+        "Aves"
+      ]
+    },
+    "Antonie van Leeuwenhoek": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Bacteria",
+        "Protozoa"
+      ]
+    },
+    "Robert Koch": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Bacteria",
+        "Proteobacteria",
+        "Pseudomonadota"
+      ]
+    },
+    "Carl Woese": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Archaea",
+        "Bacteria"
+      ]
+    },
+    "Sergei Winogradsky": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Bacteria",
+        "Cyanobacteria",
+        "Cyanobacteriota"
+      ]
+    },
+    "Lynn Margulis": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Bacteria",
+        "Archaea",
+        "Eukaryota"
+      ]
+    },
+    "Jeanne Villepreux-Power": {
+      "tiers": [
+        "perfect"
+      ],
+      "taxa": [
+        "Mollusca",
+        "Cephalopoda"
+      ]
+    },
+    "Master Naturalist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "generic"
+      ]
+    },
+    "Senior Field Researcher": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "generic"
+      ]
+    },
+    "Museum Curator": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "generic"
+      ]
+    },
+    "University Professor": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "generic"
+      ]
+    },
+    "Biodiversity Expert": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "generic"
+      ]
+    },
+    "Conservation Biologist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "generic"
+      ]
+    },
+    "Wildlife Documentarian": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "generic"
+      ]
+    },
+    "Master Zoologist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Animalia"
+      ]
+    },
+    "Senior Wildlife Biologist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Animalia"
+      ]
+    },
+    "Animal Behavior Expert": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Animalia"
+      ]
+    },
+    "Conservation Zoologist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Animalia"
+      ]
+    },
+    "Master Botanist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Plantae"
+      ]
+    },
+    "Senior Plant Taxonomist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Plantae"
+      ]
+    },
+    "Herbarium Curator": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Plantae"
+      ]
+    },
+    "Ethnobotanist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Plantae"
+      ]
+    },
+    "Master Mycologist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Fungi"
+      ]
+    },
+    "Fungal Taxonomist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Fungi"
+      ]
+    },
+    "Truffle Hunter Extraordinaire": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Fungi"
+      ]
+    },
+    "Master Mammalogist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Mammalia"
+      ]
+    },
+    "Wildlife Tracker": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Mammalia"
+      ]
+    },
+    "Primate Researcher": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Mammalia",
+        "Primates"
+      ]
+    },
+    "Master Ornithologist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Aves"
+      ]
+    },
+    "Birding Guide": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Aves"
+      ]
+    },
+    "Avian Researcher": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Aves"
+      ]
+    },
+    "Master Herpetologist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Reptilia",
+        "Amphibia"
+      ]
+    },
+    "Reptile Curator": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Reptilia"
+      ]
+    },
+    "Snake Handler": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Reptilia",
+        "Squamata"
+      ]
+    },
+    "Frog Conservationist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Amphibia"
+      ]
+    },
+    "Master Ichthyologist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Actinopterygii"
+      ]
+    },
+    "Marine Biologist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Actinopterygii",
+        "Anthozoa"
+      ]
+    },
+    "Reef Expert": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Actinopterygii",
+        "Anthozoa"
+      ]
+    },
+    "Master Entomologist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Insecta"
+      ]
+    },
+    "Butterfly Curator": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Insecta",
+        "Lepidoptera"
+      ]
+    },
+    "Apiarist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Insecta",
+        "Hymenoptera"
+      ]
+    },
+    "Master Arachnologist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Arachnida"
+      ]
+    },
+    "Spider Expert": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Arachnida"
+      ]
+    },
+    "Master Malacologist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Gastropoda"
+      ]
+    },
+    "Shell Collector": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Gastropoda"
+      ]
+    },
+    "Coral Reef Scientist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Anthozoa"
+      ]
+    },
+    "Marine Invertebrate Expert": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Anthozoa"
+      ]
+    },
+    "Lepidopterist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Lepidoptera"
+      ]
+    },
+    "Butterfly Specialist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Lepidoptera"
+      ]
+    },
+    "Coleopterist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Coleoptera"
+      ]
+    },
+    "Beetle Expert": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Coleoptera"
+      ]
+    },
+    "Hymenopterist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Hymenoptera"
+      ]
+    },
+    "Bee Researcher": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Hymenoptera"
+      ]
+    },
+    "Carnivore Specialist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Carnivora"
+      ]
+    },
+    "Big Cat Expert": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Carnivora"
+      ]
+    },
+    "Primatologist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Primates"
+      ]
+    },
+    "Great Ape Researcher": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Primates"
+      ]
+    },
+    "Cetologist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Cetacea"
+      ]
+    },
+    "Whale Researcher": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Cetacea"
+      ]
+    },
+    "Songbird Specialist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Passeriformes"
+      ]
+    },
+    "Passerine Expert": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Passeriformes"
+      ]
+    },
+    "Squamate Specialist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Squamata"
+      ]
+    },
+    "Monitor Lizard Maven": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Squamata"
+      ]
+    },
+    "Gram Stain Savant": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Bacteria",
+        "Proteobacteria",
+        "Pseudomonadota"
+      ]
+    },
+    "Extremophile Enthusiast": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Archaea",
+        "Euryarchaeota",
+        "Crenarchaeota",
+        "Thermoproteota"
+      ]
+    },
+    "Flower Phylogenist": {
+      "tiers": [
+        "excellent"
+      ],
+      "taxa": [
+        "Plantae",
+        "Magnoliopsida",
+        "Liliopsida",
+        "Angiospermae"
+      ]
+    },
+    "Field Naturalist": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "generic"
+      ]
+    },
+    "Nature Guide": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "generic"
+      ]
+    },
+    "Wildlife Photographer": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "generic",
+        "Animalia"
+      ]
+    },
+    "National Park Ranger": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "generic"
+      ]
+    },
+    "Zookeeper": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "generic",
+        "Animalia"
+      ]
+    },
+    "Biology Teacher": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "generic"
+      ]
+    },
+    "Nature Center Educator": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "generic"
+      ]
+    },
+    "Field Zoologist": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Animalia"
+      ]
+    },
+    "Safari Guide": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Animalia",
+        "Mammalia"
+      ]
+    },
+    "Zoo Educator": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Animalia"
+      ]
+    },
+    "Field Botanist": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Plantae"
+      ]
+    },
+    "Garden Curator": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Plantae"
+      ]
+    },
+    "Nature Photographer": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Plantae"
+      ]
+    },
+    "Arborist": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Plantae"
+      ]
+    },
+    "Mushroom Forager": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Fungi"
+      ]
+    },
+    "Mycology Enthusiast": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Fungi"
+      ]
+    },
+    "Fungal Photographer": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Fungi"
+      ]
+    },
+    "Mammal Tracker": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Mammalia"
+      ]
+    },
+    "Wildlife Safari Guide": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Mammalia"
+      ]
+    },
+    "Zoo Naturalist": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Mammalia"
+      ]
+    },
+    "Birdwatching Guide": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Aves"
+      ]
+    },
+    "Audubon Society Member": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Aves"
+      ]
+    },
+    "Bird Bander": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Aves"
+      ]
+    },
+    "Reptile Keeper": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Reptilia"
+      ]
+    },
+    "Herp Society Member": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Reptilia",
+        "Amphibia"
+      ]
+    },
+    "Frog Watcher": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Amphibia"
+      ]
+    },
+    "Vernal Pool Surveyor": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Amphibia"
+      ]
+    },
+    "Aquarium Curator": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Actinopterygii"
+      ]
+    },
+    "Fish Keeper": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Actinopterygii"
+      ]
+    },
+    "Snorkeling Guide": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Actinopterygii"
+      ]
+    },
+    "Bug Collector": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Insecta"
+      ]
+    },
+    "Butterfly Watcher": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Insecta",
+        "Lepidoptera"
+      ]
+    },
+    "Beekeeper": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Insecta",
+        "Hymenoptera"
+      ]
+    },
+    "Crocodile Wrangler": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Reptilia",
+        "Crocodilia"
+      ]
+    },
+    "Petri Dish Naturalist": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Bacteria"
+      ]
+    },
+    "Hot Spring Soaker": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Archaea",
+        "Cyanobacteria",
+        "Cyanobacteriota"
+      ]
+    },
+    "Algal Bloom Observer": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Cyanobacteria",
+        "Cyanobacteriota"
+      ]
+    },
+    "Tidepool Surveyor": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Mollusca",
+        "Crustacea",
+        "Echinodermata"
+      ]
+    },
+    "Shark Week Scholar": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Chondrichthyes",
+        "Elasmobranchii"
+      ]
+    },
+    "Flower Press Curator": {
+      "tiers": [
+        "good"
+      ],
+      "taxa": [
+        "Plantae",
+        "Magnoliopsida",
+        "Liliopsida",
+        "Angiospermae"
+      ]
+    },
+    "Amateur Naturalist": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "generic"
+      ]
+    },
+    "Nature Enthusiast": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "generic"
+      ]
+    },
+    "Weekend Hiker": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "generic"
+      ]
+    },
+    "Backyard Birdwatcher": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "generic",
+        "Aves"
+      ]
+    },
+    "Pet Owner": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "generic"
+      ]
+    },
+    "Zoo Visitor": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "generic"
+      ]
+    },
+    "Weekend Zoo Goer": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "generic"
+      ]
+    },
+    "Nature Documentary Fan": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "generic"
+      ]
+    },
+    "EPA Auditor": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "generic"
+      ]
+    },
+    "Dog Walker": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Animalia",
+        "Mammalia",
+        "Carnivora"
+      ]
+    },
+    "Cat Owner": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Animalia",
+        "Mammalia",
+        "Carnivora"
+      ]
+    },
+    "Goldfish Keeper": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Animalia",
+        "Actinopterygii"
+      ]
+    },
+    "Guinea Pig Parent": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Animalia",
+        "Mammalia",
+        "Rodentia"
+      ]
+    },
+    "Hamster Handler": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Animalia",
+        "Mammalia",
+        "Rodentia"
+      ]
+    },
+    "Casual Zoo Visitor": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Animalia"
+      ]
+    },
+    "Houseplant Owner": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Plantae"
+      ]
+    },
+    "Lawn Mower": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Plantae"
+      ]
+    },
+    "Grocery Shopper": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Plantae"
+      ]
+    },
+    "Backyard Gardener": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Plantae"
+      ]
+    },
+    "Weekend Weeder": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Plantae"
+      ]
+    },
+    "Salad Eater": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Plantae"
+      ]
+    },
+    "Mushroom Soup Fan": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Fungi"
+      ]
+    },
+    "Fermenting Enthusiast": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Fungi"
+      ]
+    },
+    "Zoo Gift Shop Browser": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Mammalia"
+      ]
+    },
+    "Pigeon Feeder": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Aves"
+      ]
+    },
+    "Seagull Dodger": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Aves"
+      ]
+    },
+    "Duck Pond Regular": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Aves"
+      ]
+    },
+    "Chicken Nugget Connoisseur": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Aves",
+        "Galliformes"
+      ]
+    },
+    "Pet Store Visitor": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Reptilia"
+      ]
+    },
+    "Lizard Looker": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Reptilia",
+        "Squamata"
+      ]
+    },
+    "Puddle Stepper": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Amphibia"
+      ]
+    },
+    "Frog Listener": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Amphibia"
+      ]
+    },
+    "Sushi Consumer": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Actinopterygii"
+      ]
+    },
+    "Aquarium Window Watcher": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Osteichthyes",
+        "Actinopterygii"
+      ]
+    },
+    "Bug Swatter": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Insecta"
+      ]
+    },
+    "Fly Dodger": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Insecta",
+        "Diptera"
+      ]
+    },
+    "Mosquito Magnet": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Insecta",
+        "Diptera"
+      ]
+    },
+    "Ant Stomper": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Insecta",
+        "Hymenoptera"
+      ]
+    },
+    "Cow Tipper": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Artiodactyla",
+        "Mammalia"
+      ]
+    },
+    "Pig Farmer": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Artiodactyla",
+        "Mammalia"
+      ]
+    },
+    "Goat Yoga Participant": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Artiodactyla",
+        "Mammalia"
+      ]
+    },
+    "Chicken Keeper": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Galliformes",
+        "Aves"
+      ]
+    },
+    "Egg Collector": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Galliformes",
+        "Aves"
+      ]
+    },
+    "Turkey Pardoner": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Galliformes",
+        "Aves"
+      ]
+    },
+    "Cat Video Watcher": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Carnivora",
+        "Mammalia"
+      ]
+    },
+    "Dog Park Regular": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Carnivora",
+        "Mammalia"
+      ]
+    },
+    "Squirrel Feeder": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Rodentia",
+        "Mammalia"
+      ]
+    },
+    "Mouse Trap Setter": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Rodentia",
+        "Mammalia"
+      ]
+    },
+    "Yogurt Label Reader": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Bacteria",
+        "Bacillota",
+        "Firmicutes"
+      ]
+    },
+    "Sourdough Starter Babysitter": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Fungi",
+        "Ascomycota"
+      ]
+    },
+    "Kombucha Bottler": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Bacteria",
+        "Fungi",
+        "Ascomycota"
+      ]
+    },
+    "Sea Shell Pocketer": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Mollusca",
+        "Gastropoda",
+        "Bivalvia"
+      ]
+    },
+    "Fishtank Tapper": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Mollusca",
+        "Crustacea",
+        "Echinodermata",
+        "Asteroidea"
+      ]
+    },
+    "Succulent Overwaterer": {
+      "tiers": [
+        "needs_improvement"
+      ],
+      "taxa": [
+        "Plantae",
+        "Magnoliopsida",
+        "Liliopsida",
+        "Angiospermae"
+      ]
+    }
+  }
+}

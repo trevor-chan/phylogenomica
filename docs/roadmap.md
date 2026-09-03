@@ -108,9 +108,12 @@ The cladogram is now the interface: it grows left to right from the root toward
 the target with the open stage's cards in a row beneath it, and encodes
 resolved/unresolved, inferred/revealed, and polytomy structure on independent
 visual channels. Completed stages compact into history bands while the current
-stage receives most of the viewport. Game schema version 3 carries both
-`age_ma` and optional `clade_name` on every tier; the generator version moved
-to 3 with it, so earlier games are refused on load and must be regenerated.
+stage receives most of the viewport. Game schema version 4 carries `age_ma` and
+optional `clade_name` on every tier plus the target's complete named ancestral
+lineage. That lineage lets the presentation layer select a target-aware title
+at game completion without exposing the concealed answer during play. The
+generator version moved to 4 with the schema, so earlier games are refused on
+load and must be regenerated.
 
 One generated game now plays at two difficulties. Expert is the mode described
 throughout `docs/game_design.md`. Guided reveals the target from the opening

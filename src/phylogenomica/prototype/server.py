@@ -78,6 +78,7 @@ from phylogenomica.generation.game import (
 from phylogenomica.generation.selection import RelativeSelectionError
 from phylogenomica.prototype.descriptions import BackgroundDescriptionDownloader
 from phylogenomica.prototype.media import BackgroundMediaDownloader
+from phylogenomica.prototype.ranks import RankTitleCatalog, load_rank_title_catalog
 from phylogenomica.tree.preprocess import (
     DEFAULT_NORMALIZED_DIR,
     TREE_DATABASE_FILENAME,
@@ -86,6 +87,7 @@ from phylogenomica.tree.preprocess import (
 
 PAGE_PATH = Path(__file__).with_name("index.html")
 MAX_REQUEST_BYTES = 4096
+RANK_TITLE_CATALOG = load_rank_title_catalog()
 
 
 @dataclass
@@ -370,9 +372,12 @@ def build_view(
     media_library: WikimediaLibrary | None = None,
     review_stage_index: int | None = None,
     descriptions: WikipediaLibrary | None = None,
+    rank_titles: RankTitleCatalog = RANK_TITLE_CATALOG,
 ) -> dict[str, object]:
     """Render everything the page may know at this moment."""
     difficulty = state.difficulty
+    current_score = score(game, state)
+    maximum = maximum_score(game, difficulty)
     placed_by_id = {placed.species_id: placed for placed in state.placements}
     visible_stage_index = (
         review_stage_index
@@ -402,6 +407,16 @@ def build_view(
             for member in dealt_members(open_stage, difficulty)
         ]
     target = _visible_target(game, state, difficulty)
+    attained_title = (
+        rank_titles.attained_title(
+            score=current_score,
+            maximum=maximum,
+            game_id=game.game_id,
+            target_clade_names=game.target_clade_names,
+        )
+        if state.completed
+        else None
+    )
     return {
         "difficulty": difficulty,
         "target": (
@@ -422,10 +437,13 @@ def build_view(
             and open_stage.stage_index == len(game.stages) - 1
         ),
         "cards": cards,
-        "score": score(game, state),
-        "maximum": maximum_score(game, difficulty),
+        "score": current_score,
+        "maximum": maximum,
         "stage_scores": list(state.stage_scores),
         "completed": state.completed,
+        "attained_title": (
+            None if attained_title is None else attained_title.to_dict()
+        ),
         "reviewing_stage": review_stage_index is not None,
         "lineage": _lineage(
             game,

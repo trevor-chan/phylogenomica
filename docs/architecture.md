@@ -199,6 +199,17 @@ restarts the current target under the other mode — a difficulty decides which
 cards a stage deals, so an in-progress position cannot be reinterpreted under
 one it was not reached with.
 
+Endgame rank titles are presentation metadata owned by
+`phylogenomica.prototype.ranks`. The validated catalog lives at
+`data/gameplay/rank_titles.json`, including its taxon-to-clade alias table, and
+is recorded in the gameplay manifest. The server maps points lost to a title
+tier and uses a stable hash to choose first across every taxon label matching
+any named target clade, without preferring deeper clades, and then across that
+label's titles. Generic titles remain fallbacks. Only a completed view receives
+the selected title; the target lineage itself is never sent to the browser. The
+browser renders “You've attained the title: …” without inspecting topology or
+scoring rules.
+
 Developer scripts in `scripts/` call these modules but contain no reusable
 business logic. A future API and frontend should be separate layers rather than
 new responsibilities inside the engine.
@@ -452,10 +463,11 @@ subordinate to topology and avoids turning recognizability into an eligibility
 rule. The output contains 49 role-assigned relatives; the global target supplies
 the tenth member of the ultimate stage during game assembly.
 
-Game generator version 3 implements steps 6–7 as the immutable `GeneratedGame`
+Game generator version 4 implements steps 6–7 as the immutable `GeneratedGame`
 above. It resolves cards, appends the target to the ultimate stage, records
 each stage's backbone boundary nodes, divergence ages, and optional clade
-names, shuffles members, and validates.
+names, records the target's complete named ancestor lineage, shuffles members,
+and validates.
 
 Game schema version 2 added `age_ma` to every tier; version 3 adds the optional
 normalized node `scientific_name` as `clade_name`. Both are display metadata
@@ -465,6 +477,12 @@ the generator now emits different content, its version also moved to 3, which
 changes every `game_id` and every stage shuffle; earlier games are refused on
 load rather than reinterpreted. Selection is unaffected, since the relative
 selector seeds from its own version.
+
+Game schema version 4 adds `target_clade_names`, the ordered nonblank names on
+the target's complete root-to-parent lineage. This is presentation metadata for
+endgame title matching; it is withheld from the browser until completion. The
+generator also moved to version 4, so version 3 games are refused rather than
+silently receiving generic titles.
 
 Ages are sparse — roughly 46% of tiers carry one on the historical snapshot —
 so a missing age is `None` rather than a defect. Validation checks that ages

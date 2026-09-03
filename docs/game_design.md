@@ -417,7 +417,25 @@ closest relative in guided play. The endgame then:
 1. resolves remaining stage structure;
 2. highlights the target image, vernacular name, and scientific name;
 3. reopens the completed cladogram at full width;
-4. shows the final score and relationship history.
+4. shows the final score and relationship history; and
+5. awards a target-aware title for the player's score.
+
+For a default 45-point game, title tiers are `0–34`, `35–39`, `40–44`, and a
+perfect `45`. The implementation expresses these as 11 or more points lost,
+6–10 lost, 1–5 lost, and none lost so configured games with another maximum
+retain the same meaning. The endgame says, “You've attained the title:
+*title*.”
+
+Title matching uses the target's named ancestor clades, not a taxonomic rank.
+Every curated taxon label in the score tier matching any clade in that lineage
+joins the selection pool; deeper matches are not preferred. The system first
+chooses uniformly among those labels and then among that label's titles. A
+generic title is used only when no tagged label matches. A versioned alias table
+bridges source vocabulary such as `Metazoa` to catalog vocabulary such as
+`Animalia`. Selection is pseudorandom but deterministic for the game and score
+tier, so different games gain variety without changing their title on reload.
+Titles are presentation feedback and never affect generation, correctness, or
+scoring.
 
 Free-text or early target identification is deferred as a possible alternate
 mode because it tests different knowledge from the core topology puzzle.

@@ -44,8 +44,8 @@ from phylogenomica.tree.preprocess import (
 )
 from phylogenomica.tree.query import BiologicalTree, TaxonRef, TreeQueryError
 
-GAME_SCHEMA_VERSION = 3
-GAME_GENERATOR_VERSION = 3
+GAME_SCHEMA_VERSION = 4
+GAME_GENERATOR_VERSION = 4
 
 GameRole = Literal["decoy", "mulligan", "unlock", "target"]
 MEMBER_ROLES = frozenset(("decoy", "mulligan", "unlock", "target"))
@@ -99,6 +99,7 @@ class GeneratedGame:
     seed: int
     configuration: FeasibilityConfig
     stages: tuple[GeneratedStage, ...]
+    target_clade_names: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         result = asdict(self)
@@ -163,6 +164,17 @@ def _generated_stage_from_dict(payload: Mapping[str, object]) -> GeneratedStage:
     )
 
 
+def _target_clade_names_from_dict(value: object) -> tuple[str, ...]:
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        raise ValueError("target_clade_names must be a list")
+    names: list[str] = []
+    for name in value:
+        if not isinstance(name, str):
+            raise ValueError("target_clade_names must contain strings")
+        names.append(name)
+    return tuple(names)
+
+
 def game_from_dict(payload: Mapping[str, object]) -> GeneratedGame:
     """Rebuild and fully validate an immutable game from its serialized form.
 
@@ -196,6 +208,9 @@ def game_from_dict(payload: Mapping[str, object]) -> GeneratedGame:
             ),
             stages=tuple(
                 _generated_stage_from_dict(stage) for stage in payload["stages"]  # type: ignore[union-attr]
+            ),
+            target_clade_names=_target_clade_names_from_dict(
+                payload["target_clade_names"]
             ),
         )
     except (
@@ -515,6 +530,11 @@ def validate_game_structure(
         raise GameGenerationError("game has an unsupported generator version")
     if game.game_id != _game_id(game):
         raise GameGenerationError("game ID does not match generation inputs")
+    if not isinstance(game.target_clade_names, tuple) or any(
+        not name.strip() or name != name.strip()
+        for name in game.target_clade_names
+    ):
+        raise GameGenerationError("target clade names are blank or unnormalized")
     config = game.configuration
     if len(game.stages) != config.stages_per_game:
         raise GameGenerationError("game has the wrong number of stages")
@@ -635,6 +655,10 @@ def assemble_game(
     validate_relative_selection(selection, config=selection.configuration)
     all_species_ids = selection.relative_species_ids + (selection.target_id,)
     try:
+        with BiologicalTree.open(tree_database) as tree:
+            backbone_node_ids = tree.lineage_node_ids(
+                TaxonRef("leaf", selection.target_id)
+            )
         with CardMetadataStore.open(normalized_database) as metadata:
             if metadata.dataset_version != selection.dataset_version:
                 raise GameGenerationError(
@@ -654,13 +678,15 @@ def assemble_game(
                     for stage in selection.stages
                     for relative in stage.relatives
                 ]
-            )
-        with BiologicalTree.open(tree_database) as tree:
-            backbone_node_ids = tree.lineage_node_ids(
-                TaxonRef("leaf", selection.target_id)
+                + list(backbone_node_ids)
             )
     except (CardMetadataError, TreeQueryError) as error:
         raise GameGenerationError(str(error)) from error
+    target_clade_names = tuple(
+        name
+        for node_id in backbone_node_ids
+        if (name := clade_names[node_id]) is not None
+    )
 
     stages: list[GeneratedStage] = []
     for selected_stage in selection.stages:
@@ -723,6 +749,7 @@ def assemble_game(
         seed=selection.seed,
         configuration=selection.configuration,
         stages=tuple(stages),
+        target_clade_names=target_clade_names,
     )
     validate_generated_game(
         game, selection=selection, backbone_node_ids=backbone_node_ids

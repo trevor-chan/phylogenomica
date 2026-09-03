@@ -937,6 +937,9 @@ def test_round_trips_tier_display_metadata(sources: dict[str, Path]) -> None:
     assert [t.clade_name for s in restored.stages for t in s.tiers] == [
         t.clade_name for s in game.stages for t in s.tiers
     ]
+    assert restored.target_clade_names == tuple(
+        f"Clade {node_id}" for node_id in range(1, TIER_COUNT + 1) if node_id != 3
+    )
 
 
 @pytest.mark.parametrize(
@@ -991,6 +994,21 @@ def test_round_trips_tier_display_metadata(sources: dict[str, Path]) -> None:
             "invalid serialized game",
             id="missing-clade-name-field",
         ),
+        pytest.param(
+            lambda payload: payload.update(target_clade_names=["Clade 1", "  "]),
+            "target clade names are blank or unnormalized",
+            id="blank-target-clade-name",
+        ),
+        pytest.param(
+            lambda payload: payload.update(target_clade_names="Clade 1"),
+            "invalid serialized game",
+            id="target-clade-names-not-list",
+        ),
+        pytest.param(
+            lambda payload: payload.update(target_clade_names=["Clade 1", 2]),
+            "invalid serialized game",
+            id="target-clade-name-not-string",
+        ),
     ],
 )
 def test_rejects_invalid_tier_display_metadata(
@@ -1010,10 +1028,10 @@ def test_reports_the_new_schema_and_generator_versions(
 ) -> None:
     game = generate_game(target_id=TARGET_ID, seed=11, config=_config(), **sources)
 
-    assert game.schema_version == GAME_SCHEMA_VERSION == 3
-    assert game.generator_version == GAME_GENERATOR_VERSION == 3
+    assert game.schema_version == GAME_SCHEMA_VERSION == 4
+    assert game.generator_version == GAME_GENERATOR_VERSION == 4
     # A game serialized by the previous generator must be refused, not guessed at.
     stale = _serialized(game)
-    stale["schema_version"] = 2
+    stale["schema_version"] = 3
     with pytest.raises(GameGenerationError, match="unsupported schema version"):
         game_from_dict(stale)
