@@ -1,17 +1,18 @@
 # Phylogenomica
 
-Phylogenomica is a phylogeny trivia and deduction game about reconstructing the
-evolutionary path to an initially concealed species. In each stage, the player searches for
-the closest selected relative. Every guess reveals part of one persistent
-cladogram, and a game progressively narrows from broad branches of life toward
-the target, which becomes a normal selectable card in the ultimate stage.
+Phylogenomica is a phylogeny trivia and deduction game about reconstructing an
+evolutionary path. In each stage, the player searches for the closest selected
+relative. Every guess reveals part of one persistent cladogram, and a game
+progressively narrows from broad branches of life toward its target. Normal
+mode reveals that target from the beginning; Expert mode conceals it until the
+ultimate stage.
 
 The pipeline, generator, gameplay engine, and a local browser prototype are
-implemented and validated against a real OneZoom snapshot, so a maintainer with
-the processed dataset can generate and play a game today. It is not yet
-distributable: the compact, licensed gameplay bundle that would let a clean
-clone play does not exist, and card images are unavailable pending the media
-work described below.
+implemented and validated against a real OneZoom snapshot. A maintainer with
+the processed dataset can generate and play a game today, with validated local
+Wikimedia images and Wikipedia descriptions when their working libraries are
+available. It is not yet distributable: the compact, reviewed gameplay bundle
+and multi-user production server do not exist yet.
 
 ## Design invariants
 
@@ -52,6 +53,8 @@ code and documentation.
   attribution, and evidence policy for downloaded assets.
 - [Architecture](docs/architecture.md) defines the internal model and module
   boundaries.
+- [Hosting plan](docs/hosting.md) records the measured storage baseline,
+  proposed release architecture, and deployment milestones.
 - [Roadmap](docs/roadmap.md) records phased delivery and open questions.
 
 ## Development
@@ -185,7 +188,7 @@ phylogenomica-generate-game 887269 \
   --output data/processed/onezoom/27400288/games/human-seed-42.json
 ```
 
-Game generator version 3 resolves one player-facing card per species from the
+Game generator version 4 resolves one player-facing card per species from the
 normalized metadata, adds the target as a normal selectable card in the
 ultimate stage, shuffles each stage on its own seeded stream, and runs every
 generated-game validator before returning. A card requires a scientific name, a
@@ -193,12 +196,13 @@ preferred English vernacular name, and an `overall_best_any` image with
 nonempty URL, rights, and licence; OTT-keyed records take precedence over
 name-keyed records, and ties resolve by source table and row ID.
 
-Game schema version 3 stores each tier's divergence age (`age_ma`) and optional
-scientific clade name (`clade_name`) on the game itself, so a serialized game
-is self-contained. Both are display metadata and never affect correctness;
-roughly 46% of tiers carry an age, and generation checks that the ages present
-never increase toward the target. Games written under earlier schemas are
-refused on load and must be regenerated.
+Game schema version 4 stores each tier's divergence age (`age_ma`), optional
+scientific clade name (`clade_name`), and the target's named ancestral clades
+on the game itself. These are display metadata and never affect correctness;
+the target lineage supports endgame title selection without crossing the wire
+during play. Roughly 46% of tiers carry an age, and generation checks that the
+ages present never increase toward the target. Games written under earlier
+schemas are refused on load and must be regenerated.
 
 The game ID is a SHA-256 digest of the dataset version, generator and selector
 versions, target, complete configuration, and seed. Identical inputs reproduce
@@ -222,17 +226,16 @@ phylogenomica-play data/processed/onezoom/27400288/games/human-seed-42.json \
 ```
 
 With no `--guess` the command plays perfectly, choosing each stage's ending
-card immediately. Gameplay engine version 1 is a pure transition over immutable
-player state: each guess returns every placement, the remaining relatives, its
-cost and bonus, and completion flags.
+card immediately. Gameplay engine version 4 is a pure transition over
+immutable player state: each guess returns every placement, the remaining
+relatives, its score change, and completion flags.
 
-Scoring is reveal-weighted. A stage is worth `N`, so a perfect game scores
-`M * N`. The stage-ending card is free; any other card costs one for itself
-plus one for every still-active relative on a strictly shallower tier, since
-choosing it exposes those as more distant. A mulligan is a flat cost of one
-cancelled by its bonus, which is what makes `mulligan → unlock` tie an
-immediate unlock. Same-tier peers are never charged and never placed, so a
-polytomy never forfeits points for its unresolved members.
+Score accrues as the tree is resolved. A guess earns one point for every scored
+card it resolves without the player choosing it, every wrong guess costs
+exactly one opportunity, and a stage with no wrong guesses earns one additional
+point. Mulligans are unscored in both directions. Normal and Expert score over
+the same members, although Normal deals no mulligan. Under the default five
+stages the maximum is 45 points.
 
 Play in a browser with the local prototype:
 
@@ -275,7 +278,7 @@ remain in their original tray positions and size for the whole stage, becoming
 disabled rather than disappearing after placement. Completed stages collapse
 into moderately compact history bands while the current stage receives most of
 the available space and readable species labels. Solid branches are resolved
-structure and a dashed branch is the concealed continuation; a filled tip is a
+structure and a dashed branch is the target clade; a filled tip is a
 relationship you inferred and a hollow one was revealed to you. Same-tier
 relatives branch from a single node as a rake, so the display never implies an
 order the topology does not support. Branching points show the scientific clade
@@ -344,19 +347,24 @@ manifests can also be supplied to import and revalidate their local files
 without network traffic. Use `--transport curl` when Conda Python cannot use the
 host system's trusted CA chain; both transports keep TLS verification enabled.
 
-This library is still ignored working storage, not the final reviewed bundle
-under `assets/gameplay/`. The seeded pilot library contains 43 of the pilot
-game's 50 cards; the other seven continue to show placeholders.
+Descriptions use the parallel ignored Wikipedia working library and can be
+filled with `--download-missing-descriptions`. They carry their own article,
+revision, URL, and CC BY-SA attribution and remain independent of image
+availability.
+
+These libraries are ignored working storage, not the final reviewed bundle
+under `assets/gameplay/`. Missing records continue to show a placeholder or no
+description without affecting gameplay.
 
 The current implementation covers reproducible acquisition, filtered
 extraction, normalized ingestion, biological-tree reconstruction, structural
 validation, read-only topology queries, batch target-feasibility analysis, a
 versioned per-target eligibility index, deterministic seeded relative
 selection, validated immutable game assembly, the UI-independent guess,
-reveal, and scoring engine, a local browser prototype, and an incremental local
-media library. The next milestone is promotion into a compact, reviewed
-gameplay bundle, so a clean clone can play with images without the ignored
-intermediates.
+reveal, and scoring engine, a local browser prototype, and incremental local
+media and description libraries. The next milestone is the compact, reviewed,
+offline-built catalog described in the [hosting plan](docs/hosting.md), so a
+clean deployment can play without ignored intermediates or runtime downloads.
 
 The project is licensed under the [MIT License](LICENSE). Source datasets and
 media retain their own licenses and attribution requirements.

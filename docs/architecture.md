@@ -134,7 +134,11 @@ produces the ordinary placeholder. The media index is presentation metadata and
 cannot alter correctness.
 
 With the explicit `--download-missing-images` option, the prototype owns one
-daemon worker that serializes library writes. It computes the game species
+daemon worker that serializes library writes. The image and description
+workers share `prototype.background.LatestGameWorker`, which owns their common
+queue, latest-request coalescing, state publication, and shutdown contract;
+each concrete worker owns only its resolver pipeline and availability check.
+The image worker computes the game species
 absent from the current library, resolves only that subset, publishes validated
 opening-stage assets first, and then processes later stages. Requests from
 “Play again” coalesce to the newest pending game while an in-flight network
@@ -216,6 +220,18 @@ scoring rules.
 Developer scripts in `scripts/` call these modules but contain no reusable
 business logic. A future API and frontend should be separate layers rather than
 new responsibilities inside the engine.
+
+### Hosted runtime boundary
+
+The local `http.server`, its process-global session, and its background
+downloaders are development conveniences rather than deployment architecture.
+The first hosted release should consume an offline-built, immutable catalog of
+validated games, compact descriptions and attribution, with optimized images
+served from static/object storage. A production adapter must isolate player
+sessions while retaining the stage-scoped API and delegating every guess to
+`phylogenomica.gameplay`. It must not require the normalized or tree build
+databases and must not enrich data during a player request. The measured
+baseline and delivery plan live in [hosting.md](hosting.md).
 
 ## Normalized records
 

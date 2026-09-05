@@ -15,7 +15,7 @@ The shortest path to a trustworthy prototype is therefore:
 4. implement generation and rules without a UI;
 5. build the visual prototype only after correctness tests pass.
 
-## Implementation snapshot — 2026-08-30
+## Implementation snapshot — 2026-09-05
 
 Completed engineering foundations:
 
@@ -128,8 +128,14 @@ difficulty rather than across the two.
 
 The next implementation sequence is:
 
-1. resolve and cache licensed media so cards can show images again; and
-2. compact a reviewed, licensed gameplay-ready subset before frontend work.
+1. define and build a compact, reviewed, offline-generated game catalog;
+2. produce card-sized image derivatives and publish them separately from the
+   application filesystem; and
+3. replace the prototype's shared session and development HTTP server with a
+   production-facing, multi-user adapter.
+
+The measured storage baseline, image/description policy, and staged deployment
+criteria are recorded in [hosting.md](hosting.md).
 
 A current production dump and explicit derived-data redistribution terms remain
 parallel release gates; development continues against the matched historical
@@ -198,7 +204,10 @@ review remain.
 - ~~Recompute target feasibility using only image-and-English-name candidate
   representatives.~~
 - ~~Replace closest-sister eligibility with the playable-lineage role model.~~
-- Measure prospective runtime-bundle size and review redistribution terms.
+- ~~Measure a prospective runtime baseline and document reduction levers.~~ See
+  [hosting.md](hosting.md). Repeat the measurement on the eventual release
+  catalog and production snapshot.
+- Review redistribution terms.
 
 Deliverable: a committed summary report and an explicit keep/change decision on
 the initial game parameters.
@@ -384,6 +393,25 @@ length, late-stage obscurity, image effects, polytomy comprehension, reveal
 clarity, scoring clarity, and navigation of the continuous tree. Adjust `N`,
 `M`, eligibility, and sampling based on evidence.
 
+## Phase 12 — Hosted prototype
+
+Status: planned. See [hosting.md](hosting.md) for the architecture and measured
+storage baseline.
+
+- Define a versioned, normalized runtime catalog and asset URL contract.
+- Build and validate a finite game catalog from reviewed offline inputs.
+- Generate visually reviewed card-sized image derivatives.
+- Separate compact runtime attribution from complete build/audit evidence.
+- Replace the process-global session with isolated, bounded player sessions.
+- Run behind a production server interface with read-only release artifacts.
+- Add request limits, CSRF and security headers, health checks, structured
+  logs, and concurrent-session tests.
+- Confirm that staging makes no upstream metadata calls and remains within
+  explicit application-disk, asset-storage, and bandwidth budgets.
+
+Deliverable: a reproducible public deployment in which concurrent players are
+isolated and all enrichment was completed before release.
+
 ## Decision gates
 
 ### After source inspection
@@ -416,14 +444,11 @@ the core loop has passed data and gameplay validation.
 
 ## Immediate next action
 
-Capture exact public-domain tags and source evidence for the seven conditional
-PD records, package the GFDL notice, and preserve the two nonstandard permission
-statements. Then build a promotion step that verifies the download, rights, and
-exported visual-review manifests before creating tracked runtime assets and an
-attribution index. In parallel, generate additional seeded games and feed their
-resolver manifests through the incremental library to measure reuse, coverage,
-and growth. Preserve explicit unresolved records and evaluate EOL/GBIF IDs as
-secondary paths rather than silently using fuzzy name matching. Finally compact
-a reviewed, licensed subset under `assets/gameplay/` and `data/gameplay/`, so a
-clean clone can play with images without ignored intermediates. Keep the current
-production dump request open as the release-data upgrade path.
+Specify the runtime catalog schema and implement its offline builder against a
+small, fixed set of generated games. The builder should deduplicate species
+metadata, require promotion evidence for every included image, emit compact
+description and attribution records, create card-sized image derivatives, and
+prove clean-directory playback without the normalized databases or network
+access. Use that first catalog to measure real cross-game species reuse and set
+the initial deployment budgets. Keep the current production dump request and
+the unresolved conditional-rights review open as parallel release gates.

@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from threading import Condition, Thread
 from typing import Any, Literal
 
 from phylogenomica.data.wikimedia import (
@@ -26,6 +25,7 @@ from phylogenomica.data.wikimedia_library import (
     update_wikimedia_library,
 )
 from phylogenomica.generation.game import GeneratedGame
+from phylogenomica.prototype.background import LatestGameWorker
 
 MediaState = Literal["idle", "queued", "resolving", "downloading", "ready", "error"]
 Resolver = Callable[..., tuple[Path, dict[str, Any]]]
@@ -33,7 +33,7 @@ Updater = Callable[..., tuple[Path, dict[str, Any]]]
 LibraryLoader = Callable[..., WikimediaLibrary]
 
 
-class BackgroundMediaDownloader:
+class BackgroundMediaDownloader(LatestGameWorker[WikimediaLibrary, MediaState]):
     """Resolve and download the latest requested game's missing media.
 
     A single daemon worker serializes writes to the dataset library. Requests
@@ -62,145 +62,25 @@ class BackgroundMediaDownloader:
         self._resolver = resolver
         self._updater = updater
         self._library_loader = library_loader
-        self._condition = Condition()
-        self._library = initial_library
-        self._pending: GeneratedGame | None = None
-        self._requested_game_id: str | None = None
-        self._state: MediaState = "idle"
-        self._error: str | None = None
-        self._revision = 0
-        self._closed = False
-        self._thread = Thread(
-            target=self._run,
-            name="phylogenomica-media",
-            daemon=True,
+        super().__init__(
+            initial_library=initial_library,
+            thread_name="phylogenomica-media",
+            idle_state="idle",
+            queued_state="queued",
+            ready_state="ready",
+            error_state="error",
+            handled_errors=(
+                WikimediaResolutionError,
+                WikimediaLibraryError,
+                OSError,
+            ),
         )
-        self._thread.start()
 
-    @property
-    def library(self) -> WikimediaLibrary | None:
-        with self._condition:
-            return self._library
-
-    def request(self, game: GeneratedGame) -> None:
-        """Queue a game without blocking its session startup."""
-        with self._condition:
-            if self._closed:
-                return
-            self._pending = game
-            self._requested_game_id = game.game_id
-            self._state = "queued"
-            self._error = None
-            self._condition.notify_all()
-
-    def close(self) -> None:
-        """Stop accepting work; an in-flight network call remains daemonized."""
-        with self._condition:
-            self._closed = True
-            self._pending = None
-            self._condition.notify_all()
-        self._thread.join(timeout=2)
-
-    def wait(self, game_id: str, timeout: float = 5) -> MediaState:
-        """Wait for one request to finish; intended for deterministic tests."""
-        with self._condition:
-            self._condition.wait_for(
-                lambda: (
-                    self._requested_game_id == game_id
-                    and self._state in {"ready", "error"}
-                ),
-                timeout=timeout,
-            )
-            return self._state
-
-    def player_status(
-        self,
-        game: GeneratedGame,
-        current_stage_index: int,
-        also_shown: Sequence[int] = (),
-    ) -> dict[str, object]:
-        """Return stage-scoped progress without exposing future species IDs.
-
-        ``also_shown`` counts species the page displays outside the open stage,
-        such as the target normal difficulty reveals from the start. Only a
-        species the player can already see belongs here.
-        """
-        with self._condition:
-            library = self._library
-            state: MediaState = (
-                self._state
-                if self._requested_game_id == game.game_id
-                else "idle"
-            )
-            revision = self._revision
-            failed = state == "error"
-        if current_stage_index >= len(game.stages):
-            members: tuple[int, ...] = ()
-        else:
-            members = tuple(
-                member.species_id for member in game.stages[current_stage_index].members
-            )
-        stage_ids = tuple(dict.fromkeys((*members, *also_shown)))
-        available = sum(
-            library is not None and library.asset(species_id) is not None
-            for species_id in stage_ids
-        )
-        return {
-            "enabled": True,
-            "state": state,
-            "available_count": available,
-            "total_count": len(stage_ids),
-            "revision": revision,
-            "failed": failed,
-        }
-
-    def _set_state(
-        self, game_id: str, state: MediaState, error: str | None = None
-    ) -> None:
-        with self._condition:
-            if self._requested_game_id == game_id:
-                self._state = state
-                self._error = error
-                self._condition.notify_all()
-
-    def _publish(self, game_id: str, library: WikimediaLibrary) -> None:
-        with self._condition:
-            self._library = library
-            self._revision += 1
-            if self._requested_game_id == game_id:
-                self._condition.notify_all()
-
-    def _run(self) -> None:
-        while True:
-            with self._condition:
-                self._condition.wait_for(
-                    lambda: self._closed or self._pending is not None
-                )
-                if self._closed:
-                    return
-                game = self._pending
-                self._pending = None
-            if game is None:  # pragma: no cover - condition invariant
-                continue
-            try:
-                self._process(game)
-            except (WikimediaResolutionError, WikimediaLibraryError, OSError) as error:
-                self._set_state(game.game_id, "error", str(error))
+    def _has_item(self, library: WikimediaLibrary, species_id: int) -> bool:
+        return library.asset(species_id) is not None
 
     def _process(self, game: GeneratedGame) -> None:
-        all_ids = tuple(
-            dict.fromkeys(
-                member.species_id
-                for stage in game.stages
-                for member in stage.members
-            )
-        )
-        library = self.library
-        missing_ids = tuple(
-            species_id
-            for species_id in all_ids
-            if library is None or library.asset(species_id) is None
-        )
+        missing_ids = self._missing_ids(game)
         if not missing_ids:
             self._set_state(game.game_id, "ready")
             return
@@ -239,9 +119,8 @@ class BackgroundMediaDownloader:
         for selected_ids in (priority_ids, remaining_ids):
             if not selected_ids:
                 continue
-            with self._condition:
-                if self._closed:
-                    return
+            if self._stop_requested():
+                return
             library_manifest_path, _ = self._updater(
                 manifest_path,
                 library_root=self.library_root,
