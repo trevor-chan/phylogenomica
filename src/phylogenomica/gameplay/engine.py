@@ -32,8 +32,9 @@ from phylogenomica.generation.game import (
 
 # Bumped when player state gains a field or a rule changes what a recorded
 # state means: version 2 added the difficulty a state is being played under,
-# and version 3 replaced deducted stage stakes with accrued stage points.
-GAMEPLAY_ENGINE_VERSION = 3
+# version 3 replaced deducted stage stakes with accrued stage points, and
+# version 4 renamed guided difficulty to normal and made it the default.
+GAMEPLAY_ENGINE_VERSION = 4
 
 Placement = Literal["guessed", "revealed"]
 
@@ -42,14 +43,14 @@ Placement = Literal["guessed", "revealed"]
 #: ``expert`` conceals the target until the ultimate stage, where choosing it
 #: ends the game, and deals a mulligan in every stage.
 #:
-#: ``guided`` reveals the target from the opening stage. Naming the closest
+#: ``normal`` reveals the target from the opening stage. Naming the closest
 #: relative is then the whole task, so the mulligan — which exists only to make
 #: the second-deepest relative tempting — is not dealt, and the revealed target
 #: is shown in the ultimate stage without being selectable. The closest
 #: relative ends every stage, including the last.
-Difficulty = Literal["expert", "guided"]
-DIFFICULTIES: tuple[Difficulty, ...] = ("expert", "guided")
-DEFAULT_DIFFICULTY: Difficulty = "expert"
+Difficulty = Literal["expert", "normal"]
+DIFFICULTIES: tuple[Difficulty, ...] = ("normal", "expert")
+DEFAULT_DIFFICULTY: Difficulty = "normal"
 
 
 class GameplayError(RuntimeError):
@@ -67,7 +68,7 @@ def parse_difficulty(value: object) -> Difficulty:
 
 def target_is_revealed(difficulty: Difficulty) -> bool:
     """Return whether the target is shown before the ultimate stage."""
-    return parse_difficulty(difficulty) == "guided"
+    return parse_difficulty(difficulty) == "normal"
 
 
 @dataclass(frozen=True)
@@ -139,12 +140,12 @@ def stage_ending_ids(
     """Return the cards that complete a stage when chosen.
 
     In expert play a transition stage ends on its unlock and the ultimate stage
-    ends on the target the player has just been shown. Guided play never offers
+    ends on the target the player has just been shown. Normal play never offers
     the target as a choice, so the closest relative ends every stage: the
     unlock wherever one exists, and the ultimate stage's deepest relative —
     generated as its mulligan — where none does.
     """
-    if parse_difficulty(difficulty) == "guided":
+    if parse_difficulty(difficulty) == "normal":
         ending = stage.unlock_species_ids or stage.mulligan_species_ids
         if not ending:
             raise GameplayError("stage has no closest relative to end it")
@@ -158,7 +159,7 @@ def dealt_members(
     stage: GeneratedStage, difficulty: Difficulty = DEFAULT_DIFFICULTY
 ) -> tuple[GameMember, ...]:
     """Return the cards a difficulty puts on the table for one stage."""
-    if parse_difficulty(difficulty) != "guided":
+    if parse_difficulty(difficulty) != "normal":
         return stage.members
     # The mulligan exists to make the second-deepest relative tempting. A
     # revealed target leaves no such ambiguity, so it is dealt only in the
@@ -176,14 +177,14 @@ def selectable_members(
 ) -> tuple[GameMember, ...]:
     """Return the dealt cards the player may choose from.
 
-    Guided play shows the revealed target among the ultimate stage's cards so
+    Normal play shows the revealed target among the ultimate stage's cards so
     the player can see what they are placing relatives against, but choosing it
     is not the task and is not allowed.
     """
     return tuple(
         member
         for member in dealt_members(stage, difficulty)
-        if not (parse_difficulty(difficulty) == "guided" and member.role == "target")
+        if not (parse_difficulty(difficulty) == "normal" and member.role == "target")
     )
 
 
@@ -339,7 +340,7 @@ def apply_guess(
     ends_stage = species_id in stage_ending_ids(stage, state.difficulty)
     if ends_stage:
         # The stage resolves in full. Every dealt card lands, including one the
-        # player was never allowed to choose: guided play's revealed target is
+        # player was never allowed to choose: normal play's revealed target is
         # the deepest of them and closes the cladogram as the endpoint it
         # always was.
         stage_placed = {
@@ -590,7 +591,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_DIFFICULTY,
         help=(
             "expert conceals the target and deals a mulligan; "
-            f"guided reveals it and does not (default: {DEFAULT_DIFFICULTY})"
+            f"normal reveals it and does not (default: {DEFAULT_DIFFICULTY})"
         ),
     )
     parser.add_argument(

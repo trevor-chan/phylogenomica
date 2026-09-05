@@ -85,7 +85,7 @@ Owns active relatives, guesses, reveals, scoring, stage transitions, game
 completion, and serializable player state. It operates on an already validated
 game and does not query upstream databases.
 
-Gameplay engine version 3 is a pure transition function over immutable state:
+Gameplay engine version 4 is a pure transition function over immutable state:
 `apply_guess(game, state, species_id)` returns the next `GameState` and a
 `GuessOutcome` carrying every placement, the remaining relatives, the points
 the guess earned, whether it was a wrong guess, the running score, and
@@ -105,6 +105,9 @@ to reconcile. Generation is untouched by difficulty: one generated game serves b
 modes, so a seed produces one topology and switching modes cannot change what
 is true about the lineage. Player state carries its own difficulty, and a state
 relabelled as the other mode fails validation rather than being reinterpreted.
+Version 4 renames the former `guided` state value to `normal` and makes Normal
+the default difficulty. Version 3 states are refused on restore rather than
+silently translating their serialized difficulty.
 
 ### `phylogenomica.prototype`
 
@@ -193,7 +196,7 @@ positions and dimensions after placement. Anonymous geometry cannot leak the
 card-to-tier answer, and the frontend never reconstructs correctness.
 
 The page renders the difficulty rather than deciding it. Each card arrives with
-a `selectable` flag the page obeys, guided play's revealed target arrives as a
+a `selectable` flag the page obeys, normal play's revealed target arrives as a
 pinned tray card and names the tree's endpoint, and `POST /api/difficulty`
 restarts the current target under the other mode — a difficulty decides which
 cards a stage deals, so an in-progress position cannot be reinterpreted under

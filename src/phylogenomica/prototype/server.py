@@ -9,7 +9,7 @@ reveals a card's tier and role only once that card has been placed. Anonymous
 tree slots may advertise a mulligan or unlock role, but no active card is
 mapped to one of those slots. The concealed target and the card-to-slot answer
 therefore never cross the wire early, even to a player reading the network
-traffic. Guided difficulty reveals the target deliberately, and only the
+traffic. Normal difficulty reveals the target deliberately, and only the
 target: the answer to the open stage stays concealed exactly as it is in expert
 play.
 """
@@ -194,7 +194,7 @@ def _card(
 ) -> dict[str, object]:
     """Render one card, withholding the answer until the card is placed.
 
-    A dealt but unselectable card is guided play's revealed target: its role is
+    A dealt but unselectable card is normal play's revealed target: its role is
     what the player has been told, so it travels with the card rather than
     waiting for a placement that only the end of the game will produce.
     """
@@ -351,7 +351,7 @@ def _visible_target(
 ) -> GameMember | None:
     """Return the target card the page is allowed to show right now.
 
-    Guided play reveals it from the opening stage. A completed game may show
+    Normal play reveals it from the opening stage. A completed game may show
     it under any difficulty: the lineage on the board already ends there, so
     naming it withholds nothing the player has not earned.
     """
@@ -711,7 +711,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=DIFFICULTIES,
         default=DEFAULT_DIFFICULTY,
         help=(
-            "expert conceals the target and deals a mulligan; guided reveals "
+            "expert conceals the target and deals a mulligan; normal reveals "
             f"the target and deals no mulligan (default: {DEFAULT_DIFFICULTY}). "
             "Switchable in the page."
         ),

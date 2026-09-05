@@ -51,7 +51,7 @@ ordered relative roles across a polytomy.
 In expert difficulty the target is the concealed endpoint during the first
 `M - 1` stages. In the ultimate stage it is shown as a normal card with its
 image and names, occupies the terminal selectable position, and ends the game
-when clicked. Guided difficulty reveals it from the opening stage instead; see
+when clicked. Normal difficulty reveals it from the opening stage instead; see
 [Difficulty](#difficulty).
 
 ### One continuous tree is constructed
@@ -293,7 +293,7 @@ Choose H: complete the stage.
 
 Reveal behavior must never remove a species that could still be deeper than the
 player's guess. In expert difficulty, clicking the visible target resolves the
-ultimate stage; in guided difficulty the closest relative resolves it and the
+ultimate stage; in normal difficulty the closest relative resolves it and the
 target is not selectable.
 
 ## Difficulty
@@ -308,7 +308,8 @@ above describe the shape both are drawn from.
 concealed until the ultimate stage, every stage deals a mulligan, and clicking
 the revealed target ends the game.
 
-**Guided** reveals the target — image and names — from the opening stage.
+**Normal**, the default difficulty, reveals the target — image and names — from
+the opening stage.
 Naming the closest relative is then the whole task, which changes two things:
 
 - No mulligan is dealt. It exists to make the second-deepest relative tempting,
@@ -321,12 +322,12 @@ Naming the closest relative is then the whole task, which changes two things:
   relative. Choosing it completes the game and places the target as the
   endpoint it was already known to be.
 
-Guided play therefore offers one fewer choice per stage than expert play of the
+Normal play therefore offers one fewer choice per stage than expert play of the
 same configuration. That missing choice is the unscored mulligan, so both modes
 score over the same cards and reach the same maximum; scores are directly
 comparable between them.
 
-Guided difficulty does not weaken any correctness rule. The engine still
+Normal difficulty does not weaken any correctness rule. The engine still
 resolves every guess, the answer to the open stage is still withheld until it
 is placed, and the target is the only thing the mode reveals early.
 
@@ -361,7 +362,7 @@ field is rewarded rather than charged. Because the mulligan is unscored,
 is zero: spending a guess on every decoy leaves nothing to earn.
 
 Stage maxima are uniform across stages and games of one configuration, and the
-two difficulties share them. Expert deals one card more per stage than guided,
+two difficulties share them. Expert deals one card more per stage than normal,
 but that card is the unscored mulligan, so both modes score over the same
 cards; see [Difficulty](#difficulty).
 
@@ -412,7 +413,7 @@ not which shuffled card belongs there.
 ## Endgame
 
 Ending the last stage ends the game: clicking the target in expert play, or its
-closest relative in guided play. The endgame then:
+closest relative in normal play. The endgame then:
 
 1. resolves remaining stage structure;
 2. highlights the target image, vernacular name, and scientific name;
@@ -454,7 +455,7 @@ the root once, on completion, so the lineage reads from Life outward rather
 than from the end the player just reached. After that the viewport is the
 player's; nothing re-centres it.
 
-The target is named in the endgame under both difficulties. Guided play has
+The target is named in the endgame under both difficulties. Normal play has
 shown it from the opening stage; expert play has just placed it. In neither
 case does naming it disclose anything the completed lineage does not already.
 

@@ -219,9 +219,11 @@ def _small_game() -> GeneratedGame:
 def test_perfect_play_scores_the_maximum() -> None:
     game = _documented_game()
 
-    state, outcomes = replay(game, perfect_guesses(game))
+    state, outcomes = replay(
+        game, perfect_guesses(game, "expert"), "expert"
+    )
 
-    assert score(game, state) == maximum_score(game) == 14
+    assert score(game, state) == maximum_score(game, "expert") == 14
     assert state.completed
     assert state.stage_scores == (7, 7)
     assert len(state.placements) == 16
@@ -236,11 +238,15 @@ def test_perfect_play_scores_the_maximum() -> None:
 
 def test_mulligan_then_stage_ending_card_ties_perfect_play() -> None:
     game = _documented_game()
-    immediate, _ = replay(game, perfect_guesses(game))
+    immediate, _ = replay(game, perfect_guesses(game, "expert"), "expert")
 
-    routed, outcomes = replay(game, [G, H, 15, TARGET])
+    routed, outcomes = replay(game, [G, H, 15, TARGET], "expert")
 
-    assert score(game, routed) == score(game, immediate) == maximum_score(game)
+    assert (
+        score(game, routed)
+        == score(game, immediate)
+        == maximum_score(game, "expert")
+    )
     assert routed.stage_scores == immediate.stage_scores
     mulligan = outcomes[0]
     # The mulligan is not scored: choosing it costs nothing, leaves the stage
@@ -256,7 +262,7 @@ def test_mulligan_then_stage_ending_card_ties_perfect_play() -> None:
 def test_scores_the_documented_worked_example() -> None:
     game = _documented_game()
 
-    state, outcomes = replay(game, [B, C, F, G, H])
+    state, outcomes = replay(game, [B, C, F, G, H], "expert")
 
     # A guess earns the relationships it resolved for you; the card you chose
     # scores nothing itself.
@@ -271,7 +277,7 @@ def test_scores_the_documented_worked_example() -> None:
     # The score rises with every guess and is never taken back.
     assert [o.score for o in outcomes] == [1, 1, 3, 3, 3]
     # Three wrong guesses, so three points off the stage and no clean bonus.
-    assert outcomes[-1].stage_score == 3 == stage_maximum(game) - 1 - 3
+    assert outcomes[-1].stage_score == 3 == stage_maximum(game, "expert") - 1 - 3
     assert not outcomes[-1].perfect_stage
     assert state.stage_scores == (3,)
     assert outcomes[0].placed[0].placement == "guessed"
@@ -281,7 +287,7 @@ def test_scores_the_documented_worked_example() -> None:
 
 def test_every_wrong_guess_costs_one_however_near_it_was() -> None:
     game = _documented_game()
-    state = initial_state(game)
+    state = initial_state(game, "expert")
 
     _, shallow = apply_guess(game, state, A)
     _, near = apply_guess(game, state, F)
@@ -291,8 +297,8 @@ def test_every_wrong_guess_costs_one_however_near_it_was() -> None:
     # resolves nothing. Both cost the stage exactly one point.
     assert (shallow.earned, near.earned) == (0, 5)
     assert shallow.missed and near.missed
-    shallow_stage, _ = replay(game, [A, H])
-    near_stage, _ = replay(game, [F, H])
+    shallow_stage, _ = replay(game, [A, H], "expert")
+    near_stage, _ = replay(game, [F, H], "expert")
     assert shallow_stage.stage_scores == near_stage.stage_scores == (5,)
 
 
@@ -302,7 +308,7 @@ def test_a_guess_never_eliminates_a_possibly_deeper_relative() -> None:
     depth = {m.species_id: m.tier_index for m in stage.members}
 
     for guess in (A, B, C, D, E, F, G):
-        _, outcome = apply_guess(game, initial_state(game), guess)
+        _, outcome = apply_guess(game, initial_state(game, "expert"), guess)
         placed = {p.species_id for p in outcome.placed}
         deeper = {
             species_id
@@ -316,7 +322,7 @@ def test_a_guess_never_eliminates_a_possibly_deeper_relative() -> None:
 def test_polytomy_peers_stay_active_and_cost_nothing_extra() -> None:
     game = _documented_game()
 
-    state, first = apply_guess(game, initial_state(game), C)
+    state, first = apply_guess(game, initial_state(game, "expert"), C)
 
     # D and E share C's tier, so the guess established no order among them.
     assert set(first.remaining_species_ids) >= {D, E}
@@ -331,7 +337,7 @@ def test_polytomy_peers_stay_active_and_cost_nothing_extra() -> None:
 def test_advances_stages_and_completes_the_game() -> None:
     game = _documented_game()
 
-    state, unlock = apply_guess(game, initial_state(game), H)
+    state, unlock = apply_guess(game, initial_state(game, "expert"), H)
 
     assert unlock.stage_completed and not unlock.game_completed
     assert state.current_stage_index == 1
@@ -349,35 +355,35 @@ def test_advances_stages_and_completes_the_game() -> None:
     assert state.current_stage_index == len(game.stages)
 
 
-def test_guided_play_deals_every_card_but_the_mulligan() -> None:
+def test_normal_play_deals_every_card_but_the_mulligan() -> None:
     game = _documented_game()
     transition, ultimate = game.stages
 
-    dealt = {member.species_id for member in dealt_members(transition, "guided")}
+    dealt = {member.species_id for member in dealt_members(transition, "normal")}
     selectable = {
-        member.species_id for member in selectable_members(transition, "guided")
+        member.species_id for member in selectable_members(transition, "normal")
     }
 
     # The mulligan exists to make the second-deepest relative tempting, which a
     # revealed target settles outright.
     assert dealt == selectable == {A, B, C, D, E, F, H}
     assert G not in dealt
-    assert stage_ending_ids(transition, "guided") == {H}
+    assert stage_ending_ids(transition, "normal") == {H}
     # Expert play is untouched: one generated game serves both difficulties.
-    assert {m.species_id for m in dealt_members(transition)} == {
+    assert {m.species_id for m in dealt_members(transition, "expert")} == {
         member.species_id for member in transition.members
     }
-    assert stage_ending_ids(transition) == {H}
-    assert stage_ending_ids(ultimate) == {TARGET}
+    assert stage_ending_ids(transition, "expert") == {H}
+    assert stage_ending_ids(ultimate, "expert") == {TARGET}
 
 
-def test_guided_ultimate_stage_shows_the_target_but_never_offers_it() -> None:
+def test_normal_ultimate_stage_shows_the_target_but_never_offers_it() -> None:
     game = _documented_game()
     ultimate = game.stages[1]
 
-    dealt = {member.species_id for member in dealt_members(ultimate, "guided")}
+    dealt = {member.species_id for member in dealt_members(ultimate, "normal")}
     selectable = {
-        member.species_id for member in selectable_members(ultimate, "guided")
+        member.species_id for member in selectable_members(ultimate, "normal")
     }
 
     # With no unlock to find, the deepest relative is the closest relative and
@@ -385,35 +391,35 @@ def test_guided_ultimate_stage_shows_the_target_but_never_offers_it() -> None:
     assert TARGET in dealt
     assert selectable == dealt - {TARGET}
     assert 15 in selectable
-    assert stage_ending_ids(ultimate, "guided") == {15}
-    assert revealed_target(game, "guided").species_id == TARGET
-    assert revealed_target(game) is None
-    assert target_is_revealed("guided") and not target_is_revealed("expert")
+    assert stage_ending_ids(ultimate, "normal") == {15}
+    assert revealed_target(game, "normal").species_id == TARGET
+    assert revealed_target(game, "expert") is None
+    assert target_is_revealed("normal") and not target_is_revealed("expert")
 
 
-def test_guided_play_scores_one_choice_per_card_it_offers() -> None:
+def test_normal_play_scores_one_choice_per_card_it_offers() -> None:
     game = _documented_game()
 
-    state, outcomes = replay(game, perfect_guesses(game, "guided"), "guided")
+    state, outcomes = replay(game, perfect_guesses(game, "normal"), "normal")
 
     # Seven choices per stage rather than expert's eight: no mulligan is dealt,
     # and the target the ultimate stage shows cannot be chosen.
     # Both difficulties score over the same cards — the decoys plus the one
     # that ends the stage — so a stage is worth the same in either mode.
-    assert stage_maximum(game, "guided") == stage_maximum(game) == 7
-    assert score(game, state) == maximum_score(game, "guided") == 14
+    assert stage_maximum(game, "normal") == stage_maximum(game) == 7
+    assert score(game, state) == maximum_score(game, "normal") == 14
     assert state.stage_scores == (7, 7)
     assert state.completed
-    assert perfect_guesses(game, "guided") == (H, 15)
+    assert perfect_guesses(game, "normal") == (H, 15)
     # Six relatives resolved plus the clean-stage point; the revealed target
     # lands with them but is not one of the stage's choices.
     assert [(o.earned, o.perfect_stage) for o in outcomes] == [(6, True), (6, True)]
 
 
-def test_guided_play_scores_decoys_exactly_as_expert_play_does() -> None:
+def test_normal_play_scores_decoys_exactly_as_expert_play_does() -> None:
     game = _documented_game()
 
-    _, outcomes = replay(game, [B, C, F, H], "guided")
+    _, outcomes = replay(game, [B, C, F, H], "normal")
 
     assert [o.earned for o in outcomes] == [
         1,  # B resolves A
@@ -432,10 +438,10 @@ def test_guided_play_scores_decoys_exactly_as_expert_play_does() -> None:
     )
 
 
-def test_guided_play_places_the_revealed_target_as_the_endpoint() -> None:
+def test_normal_play_places_the_revealed_target_as_the_endpoint() -> None:
     game = _documented_game()
 
-    state, outcomes = replay(game, [H, 15], "guided")
+    state, outcomes = replay(game, [H, 15], "normal")
 
     by_id = {placed.species_id: placed for placed in state.placements}
     assert state.completed
@@ -447,9 +453,9 @@ def test_guided_play_places_the_revealed_target_as_the_endpoint() -> None:
     assert G not in by_id and 15 in by_id
 
 
-def test_guided_play_rejects_the_target_and_the_undealt_mulligan() -> None:
+def test_normal_play_rejects_the_target_and_the_undealt_mulligan() -> None:
     game = _documented_game()
-    state = initial_state(game, "guided")
+    state = initial_state(game, "normal")
 
     with pytest.raises(GameplayError, match="not in the active stage"):
         apply_guess(game, state, G)
@@ -458,19 +464,19 @@ def test_guided_play_rejects_the_target_and_the_undealt_mulligan() -> None:
     with pytest.raises(GameplayError, match="revealed target and cannot be chosen"):
         apply_guess(game, state, TARGET)
     # Expert play still ends on the target it has just shown.
-    expert, _ = apply_guess(game, initial_state(game), H)
+    expert, _ = apply_guess(game, initial_state(game, "expert"), H)
     _, final = apply_guess(game, expert, TARGET)
     assert final.game_completed
 
 
 def test_state_carries_the_difficulty_it_is_played_under() -> None:
     game = _documented_game()
-    state, _ = replay(game, [B, H], "guided")
+    state, _ = replay(game, [B, H], "normal")
 
     restored = restore_state(game, json.loads(json.dumps(state.to_dict())))
 
     assert restored == state
-    assert restored.difficulty == "guided"
+    assert restored.difficulty == "normal"
     validate_state(game, restored)
     # Each difficulty deals its own cards, so a state relabelled as the other
     # one no longer accounts for the stage it claims to be playing.
@@ -479,6 +485,8 @@ def test_state_carries_the_difficulty_it_is_played_under() -> None:
     with pytest.raises(GameplayError, match="unknown difficulty"):
         parse_difficulty("easy")
     with pytest.raises(GameplayError, match="unknown difficulty"):
+        parse_difficulty("guided")
+    with pytest.raises(GameplayError, match="unknown difficulty"):
         restore_state(
             game, {**json.loads(json.dumps(state.to_dict())), "difficulty": "easy"}
         )
@@ -486,7 +494,7 @@ def test_state_carries_the_difficulty_it_is_played_under() -> None:
 
 def test_rejects_invalid_guesses() -> None:
     game = _documented_game()
-    state = initial_state(game)
+    state = initial_state(game, "expert")
 
     with pytest.raises(GameplayError, match="not in the active stage"):
         apply_guess(game, state, 999)
@@ -499,16 +507,18 @@ def test_rejects_invalid_guesses() -> None:
     with pytest.raises(GameplayError, match="already placed"):
         apply_guess(game, state, B)
 
-    finished, _ = replay(game, perfect_guesses(game))
+    finished, _ = replay(
+        game, perfect_guesses(game, "expert"), "expert"
+    )
     with pytest.raises(GameplayError, match="already complete"):
         apply_guess(game, finished, A)
 
     other = replace(game, game_id="1" * 64)
     with pytest.raises(GameplayError, match="different game"):
-        apply_guess(other, initial_state(game), A)
+        apply_guess(other, initial_state(game, "expert"), A)
 
 
-@pytest.mark.parametrize("difficulty", ["expert", "guided"])
+@pytest.mark.parametrize("difficulty", ["expert", "normal"])
 def test_every_order_of_play_costs_exactly_one_point_per_wrong_guess(
     difficulty: str,
 ) -> None:
@@ -555,10 +565,12 @@ def test_every_order_of_play_costs_exactly_one_point_per_wrong_guess(
 def test_two_wrong_guesses_cost_exactly_two_points() -> None:
     """The reported case, pinned against the shape of the wrong guesses."""
     game = _documented_game()
-    maximum = stage_maximum(game)
+    maximum = stage_maximum(game, "expert")
 
-    shallow, _ = replay(game, [A, B, H])  # neither reveals anything
-    deep, _ = replay(game, [C, D, H])  # C reveals A and B; D is its tier peer
+    shallow, _ = replay(game, [A, B, H], "expert")  # neither reveals anything
+    deep, _ = replay(
+        game, [C, D, H], "expert"
+    )  # C reveals A and B; D is its tier peer
 
     # Two wrong guesses cost two points whether they revealed five
     # relationships between them or none.
@@ -566,7 +578,7 @@ def test_two_wrong_guesses_cost_exactly_two_points() -> None:
 
     # Two clicks are not always two wrong guesses. A card an earlier guess
     # already revealed cannot be chosen, and the mulligan is not scored at all.
-    single, outcomes = replay(game, [F, G, H])
+    single, outcomes = replay(game, [F, G, H], "expert")
     assert [o.missed for o in outcomes] == [True, False, False]
     assert single.stage_scores[0] == maximum - 1 - 1
 
@@ -574,7 +586,7 @@ def test_two_wrong_guesses_cost_exactly_two_points() -> None:
 def test_records_placements_for_the_cladogram() -> None:
     game = _documented_game()
 
-    state, _ = replay(game, [B, H, TARGET])
+    state, _ = replay(game, [B, H, TARGET], "expert")
 
     by_id = {placed.species_id: placed for placed in state.placements}
     assert by_id[B].placement == "guessed"
@@ -589,7 +601,7 @@ def test_records_placements_for_the_cladogram() -> None:
 
 def test_the_running_score_only_ever_rises() -> None:
     game = _documented_game()
-    state = initial_state(game)
+    state = initial_state(game, "expert")
 
     assert score(game, state) == 0
 
@@ -610,7 +622,7 @@ def test_the_running_score_only_ever_rises() -> None:
 
 def test_round_trips_player_state() -> None:
     game = _documented_game()
-    state, _ = replay(game, [B, C, G])
+    state, _ = replay(game, [B, C, G], "expert")
 
     payload = json.loads(json.dumps(state.to_dict()))
     restored = restore_state(game, payload)
@@ -625,14 +637,14 @@ def test_round_trips_player_state() -> None:
 
 def test_rejects_invalid_restored_state() -> None:
     game = _documented_game()
-    state, _ = replay(game, [B])
+    state, _ = replay(game, [B], "expert")
     payload = json.loads(json.dumps(state.to_dict()))
 
     validate_state(game, state)
 
     for mutate, message in (
         (lambda p: p.update(game_id="1" * 64), "different game"),
-        (lambda p: p.update(engine_version=99), "unsupported engine version"),
+        (lambda p: p.update(engine_version=3), "unsupported engine version"),
         (lambda p: p.update(completed=True), "completion flag"),
         (lambda p: p.update(stage_scores=[8]), "stage scores disagree"),
         (lambda p: p.update(stage_points=-1), "must not be negative"),
@@ -648,7 +660,7 @@ def test_rejects_invalid_restored_state() -> None:
 
 def test_rejects_a_state_that_repeats_a_placement() -> None:
     game = _documented_game()
-    state, _ = replay(game, [B])
+    state, _ = replay(game, [B], "expert")
     duplicated = replace(
         state, placements=(*state.placements, state.placements[0])
     )
@@ -659,7 +671,9 @@ def test_rejects_a_state_that_repeats_a_placement() -> None:
 
 def test_rejects_well_shaped_but_unreachable_restored_states() -> None:
     game = _documented_game()
-    completed, _ = replay(game, perfect_guesses(game))
+    completed, _ = replay(
+        game, perfect_guesses(game, "expert"), "expert"
+    )
 
     for broken in (
         # A completed game cannot omit every placement or award arbitrary score.
@@ -683,13 +697,14 @@ def test_initial_state_is_valid_and_serializable() -> None:
 
     validate_state(game, state)
     assert state.engine_version == GAMEPLAY_ENGINE_VERSION
+    assert state.difficulty == "normal"
     assert isinstance(GameState(**{**state.to_dict(), "placements": ()}), GameState)
     assert score(game, state) == 0
-    # Every dealt card is playable from the opening, one more than the stage
-    # scores over: the mulligan is a choice the player has but never pays for.
+    # Normal is the default and omits the transition-stage mulligan, so every
+    # selectable card is part of the stage score.
     assert len(state.active_species_ids) == len(
         selectable_members(game.stages[0])
-    ) == stage_maximum(game) + 1
+    ) == stage_maximum(game)
 
 
 def test_command_line_plays_a_game(
@@ -711,7 +726,7 @@ def test_command_line_plays_a_game(
     assert score(game, resumed) == 14
 
     # One wrong guess in the opening stage, then clean play.
-    main([str(path), "--guess", str(B), "--guess", str(H), "--guess", str(TARGET)])
+    main([str(path), "--guess", str(B), "--guess", str(H), "--guess", "15"])
     assert "score 12 / 14" in capsys.readouterr().out
 
     with pytest.raises(SystemExit, match="not in the active stage"):

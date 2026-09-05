@@ -98,6 +98,9 @@
   }
   #feedback.good { border-color: var(--good); }
   #feedback.cost { border-color: var(--warn); }
+  #feedback .attained-title {
+    color: var(--accent); font-weight: 800; letter-spacing: .02em;
+  }
   /* The revealed target is pinned outside the scrolling tray: it is the
      question, not one of the answers, and must stay on screen. */
   .tray { display: flex; gap: .6rem; align-items: stretch; min-width: 0; }
@@ -223,12 +226,12 @@
   <h1>Phylogenomica <span id="stage"></span></h1>
   <span id="media-status" class="media-status" hidden></span>
   <div class="difficulty" role="group" aria-label="Difficulty">
-    <button type="button" data-difficulty="expert" aria-pressed="true"
+    <button type="button" data-difficulty="normal" aria-pressed="true"
+      title="The target is shown from the start; name its closest relative each stage">
+      Normal</button>
+    <button type="button" data-difficulty="expert" aria-pressed="false"
       title="The target stays hidden until the last stage, and every stage deals a mulligan">
       Expert</button>
-    <button type="button" data-difficulty="guided" aria-pressed="false"
-      title="The target is shown from the start; name its closest relative each stage">
-      Guided</button>
   </div>
   <div class="stats">
     <div class="stat"><b id="score">0</b><small>score</small></div>
@@ -253,7 +256,7 @@
 </div>
 
 <footer>
-  <p id="feedback">Pick the closest relative to the hidden target species.</p>
+  <p id="feedback">Pick the closest relative to the target species.</p>
   <div class="tray">
     <div id="target-panel" hidden></div>
     <div id="cards"></div>
@@ -532,7 +535,7 @@ function renderTree(view) {
     }));
     appendLeafLabel(svg, leafX, endpoint.y, target);
   } else if (view.target) {
-    // Guided play knows where the lineage ends from the first stage. The
+    // Normal play knows where the lineage ends from the first stage. The
     // endpoint is named, but the branch reaching it stays dashed until the
     // relatives between here and there are placed.
     svg.appendChild(el("circle", {
@@ -756,7 +759,7 @@ function attachDetail(node, species) {
 
 function cardNode(card) {
   const node = document.createElement("button");
-  // A dealt card the server marks unselectable is guided play's revealed
+  // A dealt card the server marks unselectable is normal play's revealed
   // target: shown in full colour, but never a choice.
   const shown = !card.selectable && card.state === "revealed" && card.role === "target";
   node.className = `card ${card.state}${shown ? " shown" : ""}`;
@@ -807,7 +810,7 @@ function cardNode(card) {
   return node;
 }
 
-// The target panel is the question guided play puts on screen. It stays put
+// The target panel is the question normal play puts on screen. It stays put
 // through every stage, so the player always sees what they are placing
 // relatives against.
 function renderTargetPanel(view) {
@@ -888,15 +891,18 @@ function renderDifficulty(view) {
 }
 
 function openingPrompt(view) {
-  return view.difficulty === "guided"
+  return view.difficulty === "normal"
     ? "Pick the closest relative to the target species."
     : "Pick the closest relative to the hidden target species.";
 }
 
-function attainedTitle(view) {
-  return view.attained_title
-    ? ` You've attained the title: ${view.attained_title.title}.`
-    : "";
+function appendAttainedTitle(box, view) {
+  if (!view.attained_title) return;
+  box.append(" You've attained the title: ");
+  const title = document.createElement("strong");
+  title.className = "attained-title";
+  title.textContent = view.attained_title.title;
+  box.append(title, ".");
 }
 
 function render(view, outcome) {
@@ -938,10 +944,10 @@ function render(view, outcome) {
   updateMediaStatus(view);
   if (outcome) describe(outcome, view);
   else if (view.completed) {
-    $("feedback").className = "good";
-    $("feedback").textContent =
-      `Final score ${view.score} of ${view.maximum}.` +
-      attainedTitle(view);
+    const box = $("feedback");
+    box.className = "good";
+    box.textContent = `Final score ${view.score} of ${view.maximum}.`;
+    appendAttainedTitle(box, view);
   } else if (view.reviewing_stage) {
     const stageScore = view.stage_scores[view.stage_scores.length - 1];
     $("feedback").className = "good";
@@ -1042,13 +1048,13 @@ function describe(outcome, view) {
   const revealed = outcome.placed.filter((p) => p.placement === "revealed").length;
   if (outcome.game_completed) {
     box.classList.add("good");
-    // Guided play ends on the closest relative; expert play ends on the target.
+    // Normal play ends on the closest relative; expert play ends on the target.
     box.textContent =
       (outcome.role === "target"
         ? "You guessed the target! "
         : "Correct — you found the closest relative. ") +
-      `Your final score is ${view.score} of ${view.maximum}.` +
-      attainedTitle(view);
+      `Your final score is ${view.score} of ${view.maximum}.`;
+    appendAttainedTitle(box, view);
   } else if (outcome.stage_completed) {
     box.classList.add("good");
     box.textContent =

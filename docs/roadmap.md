@@ -116,14 +116,15 @@ generator version moved to 4 with the schema, so earlier games are refused on
 load and must be regenerated.
 
 One generated game now plays at two difficulties. Expert is the mode described
-throughout `docs/game_design.md`. Guided reveals the target from the opening
+throughout `docs/game_design.md`. Normal reveals the target from the opening
 stage, deals no mulligan, and asks for the closest relative in every stage
 including the last, where the revealed target is dealt but not selectable. The
 split lives entirely in the gameplay engine — generation, topology, and seeds
-are untouched, so both modes draw from one lineage — and gameplay engine
-version moved to 2 because player state now records the difficulty it is being
-played under. Guided stages offer one fewer choice than expert stages, so
-scores compare within a difficulty rather than across the two.
+are untouched, so both modes draw from one lineage. Gameplay engine version 4
+renames the original Guided mode to Normal, makes it the default, and refuses
+older serialized states rather than reinterpreting their difficulty. Normal
+stages offer one fewer choice than expert stages, so scores compare within a
+difficulty rather than across the two.
 
 The next implementation sequence is:
 

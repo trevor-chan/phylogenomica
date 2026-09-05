@@ -122,7 +122,7 @@ class BackgroundMediaDownloader:
         """Return stage-scoped progress without exposing future species IDs.
 
         ``also_shown`` counts species the page displays outside the open stage,
-        such as the target guided difficulty reveals from the start. Only a
+        such as the target normal difficulty reveals from the start. Only a
         species the player can already see belongs here.
         """
         with self._condition:

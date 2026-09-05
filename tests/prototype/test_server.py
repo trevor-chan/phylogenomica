@@ -150,7 +150,7 @@ def _next_game(current: GeneratedGame) -> GeneratedGame:
 def test_serves_only_the_open_stage_and_hides_the_target() -> None:
     game = _game()
 
-    view = build_view(game, initial_state(game))
+    view = build_view(game, initial_state(game, "expert"))
 
     assert view["stage_index"] == 0
     assert view["stage_count"] == 2
@@ -171,7 +171,7 @@ def test_serves_only_the_open_stage_and_hides_the_target() -> None:
 def test_reserves_anonymous_stage_slots_before_any_species_is_placed() -> None:
     game = _game()
 
-    opening = build_view(game, initial_state(game))
+    opening = build_view(game, initial_state(game, "expert"))
 
     assert [stage["stage_index"] for stage in opening["lineage"]] == [0]
     tiers = opening["lineage"][0]["tiers"]
@@ -186,7 +186,7 @@ def test_reserves_anonymous_stage_slots_before_any_species_is_placed() -> None:
     assert all(tier["populated"] is False for tier in tiers)
     assert all(tier["clade_name"] is None for tier in tiers)
 
-    state, _ = replay(game, [DECOY_A])
+    state, _ = replay(game, [DECOY_A], "expert")
     populated = build_view(game, state)["lineage"][0]["tiers"]
     assert len(populated) == len(tiers)
     assert populated[0]["species"][0]["species_id"] == DECOY_A
@@ -197,7 +197,7 @@ def test_reserves_anonymous_stage_slots_before_any_species_is_placed() -> None:
 def test_withholds_tier_and_role_until_a_card_is_placed() -> None:
     game = _game()
 
-    view = build_view(game, initial_state(game))
+    view = build_view(game, initial_state(game, "expert"))
 
     for card in view["cards"]:
         assert card["state"] == "active"
@@ -210,7 +210,7 @@ def test_withholds_tier_and_role_until_a_card_is_placed() -> None:
         assert card["rights"] is None
         assert card["license"] is None
 
-    state, _ = replay(game, [DECOY_A])
+    state, _ = replay(game, [DECOY_A], "expert")
     placed = {c["species_id"]: c for c in build_view(game, state)["cards"]}
     assert placed[DECOY_A]["state"] == "guessed"
     assert placed[DECOY_A]["tier_index"] == 0
@@ -220,7 +220,7 @@ def test_withholds_tier_and_role_until_a_card_is_placed() -> None:
 
 def test_shows_the_target_as_a_normal_card_in_the_ultimate_stage() -> None:
     game = _game()
-    state, _ = replay(game, [UNLOCK])
+    state, _ = replay(game, [UNLOCK], "expert")
 
     view = build_view(game, state)
 
@@ -238,7 +238,7 @@ def test_shows_the_target_as_a_normal_card_in_the_ultimate_stage() -> None:
 
 def test_review_view_keeps_the_completed_stage_and_hides_the_next_one() -> None:
     game = _game()
-    state, _ = replay(game, [UNLOCK])
+    state, _ = replay(game, [UNLOCK], "expert")
 
     view = build_view(game, state, review_stage_index=0)
 
@@ -257,12 +257,12 @@ def test_review_view_keeps_the_completed_stage_and_hides_the_next_one() -> None:
     })
 
 
-def test_guided_play_reveals_the_target_and_deals_no_mulligan() -> None:
+def test_normal_play_reveals_the_target_and_deals_no_mulligan() -> None:
     game = _game()
 
-    view = build_view(game, initial_state(game, "guided"))
+    view = build_view(game, initial_state(game, "normal"))
 
-    assert view["difficulty"] == "guided"
+    assert view["difficulty"] == "normal"
     assert view["target"]["species_id"] == TARGET
     assert view["target"]["english_name"] == f"Common {TARGET}"
     assert view["target"]["selectable"] is False
@@ -279,9 +279,9 @@ def test_guided_play_reveals_the_target_and_deals_no_mulligan() -> None:
     assert view["maximum"] == 4
 
 
-def test_guided_ultimate_stage_deals_the_target_without_offering_it() -> None:
+def test_normal_ultimate_stage_deals_the_target_without_offering_it() -> None:
     game = _game()
-    state, _ = replay(game, [UNLOCK], "guided")
+    state, _ = replay(game, [UNLOCK], "normal")
 
     view = build_view(game, state)
 
@@ -291,14 +291,14 @@ def test_guided_ultimate_stage_deals_the_target_without_offering_it() -> None:
     assert cards[TARGET]["state"] == "revealed"
     assert cards[TARGET]["role"] == "target"
     assert cards[MULLIGAN_B]["selectable"] is True
-    # The ultimate-stage mulligan is the answer in guided play, not a bonus.
+    # The ultimate-stage mulligan is the answer in normal play, not a bonus.
     assert [tier["slot_role"] for tier in view["lineage"][1]["tiers"]] == [
         None,
         None,
     ]
 
     # Naming the closest relative ends the game and closes the cladogram.
-    final = build_view(game, replay(game, [UNLOCK, MULLIGAN_B], "guided")[0])
+    final = build_view(game, replay(game, [UNLOCK, MULLIGAN_B], "normal")[0])
     assert final["completed"] is True
     assert final["score"] == final["maximum"] == 4
     assert [t["english_name"] for s in final["lineage"] for t in s["target"]] == [
@@ -306,10 +306,10 @@ def test_guided_ultimate_stage_deals_the_target_without_offering_it() -> None:
     ]
 
 
-def test_expert_play_is_unchanged_by_the_guided_option() -> None:
+def test_expert_play_is_unchanged_by_the_normal_option() -> None:
     game = _game()
 
-    view = build_view(game, initial_state(game))
+    view = build_view(game, initial_state(game, "expert"))
 
     assert view["difficulty"] == "expert"
     assert view["target"] is None
@@ -319,20 +319,23 @@ def test_expert_play_is_unchanged_by_the_guided_option() -> None:
         UNLOCK,
     ]
     assert all(card["selectable"] for card in view["cards"])
-    # Expert deals one card more than guided but scores over the same cards,
+    # Expert deals one card more than normal but scores over the same cards,
     # because the extra card is the unscored mulligan.
-    assert view["maximum"] == build_view(game, initial_state(game, "guided"))["maximum"]
+    assert view["maximum"] == build_view(game, initial_state(game, "normal"))["maximum"]
     assert view["maximum"] == 4
 
 
 def test_session_switches_difficulty_by_restarting_the_target() -> None:
-    session = PrototypeSession.start(_game(), _next_game)
+    default_session = PrototypeSession.start(_game(), _next_game)
+    assert default_session.difficulty == "normal"
+
+    session = PrototypeSession.start(_game(), _next_game, "expert")
     session.guess(DECOY_A)
 
-    session.set_difficulty("guided")
+    session.set_difficulty("normal")
 
-    assert session.difficulty == "guided"
-    assert session.state == initial_state(session.game, "guided")
+    assert session.difficulty == "normal"
+    assert session.state == initial_state(session.game, "normal")
     assert session.game.game_id == "a" * 64  # the same target, restarted
     assert session.review_stage_index is None
     with pytest.raises(GameplayError, match="unknown difficulty"):
@@ -340,13 +343,13 @@ def test_session_switches_difficulty_by_restarting_the_target() -> None:
 
     # A new game keeps the difficulty the player chose.
     session.play_again()
-    assert session.difficulty == "guided"
-    assert session.state == initial_state(session.game, "guided")
+    assert session.difficulty == "normal"
+    assert session.state == initial_state(session.game, "normal")
 
 
 def test_reports_the_growing_cladogram() -> None:
     game = _game()
-    state, _ = replay(game, [MULLIGAN_A, UNLOCK, TARGET])
+    state, _ = replay(game, [MULLIGAN_A, UNLOCK, TARGET], "expert")
 
     view = build_view(game, state)
 
@@ -375,16 +378,16 @@ def test_reports_the_growing_cladogram() -> None:
 def test_reports_one_running_score_out_of_the_maximum() -> None:
     game = _game()
 
-    opening = build_view(game, initial_state(game))
+    opening = build_view(game, initial_state(game, "expert"))
     assert opening["score"] == 0
     assert opening["maximum"] == 4
 
     # The open stage counts as it is played, so the score rises with the guess
     # that resolves a relationship rather than waiting for the stage to end.
-    mid, _ = replay(game, [MULLIGAN_A])
+    mid, _ = replay(game, [MULLIGAN_A], "expert")
     assert build_view(game, mid)["score"] == 1
 
-    state, _ = replay(game, [DECOY_A, UNLOCK, TARGET])
+    state, _ = replay(game, [DECOY_A, UNLOCK, TARGET], "expert")
     finished = build_view(game, state)
     assert finished["score"] == 2
     assert finished["stage_scores"] == [0, 2]
@@ -392,7 +395,7 @@ def test_reports_one_running_score_out_of_the_maximum() -> None:
 
 
 def test_session_guesses_and_plays_another_seed() -> None:
-    session = PrototypeSession.start(_game(), _next_game)
+    session = PrototypeSession.start(_game(), _next_game, "expert")
 
     outcome = session.guess(MULLIGAN_A)
     assert outcome.role == "mulligan"
@@ -403,12 +406,12 @@ def test_session_guesses_and_plays_another_seed() -> None:
     session.play_again()
     assert session.game.seed == 8
     assert session.game.game_id == "b" * 64
-    assert session.state == initial_state(session.game)
+    assert session.state == initial_state(session.game, "expert")
     assert session.state.placements == ()
 
 
 def test_session_requires_continue_after_a_transition_stage() -> None:
-    session = PrototypeSession.start(_game(), _next_game)
+    session = PrototypeSession.start(_game(), _next_game, "expert")
 
     outcome = session.guess(UNLOCK)
 
@@ -424,7 +427,7 @@ def test_session_requires_continue_after_a_transition_stage() -> None:
 
 
 def test_session_never_reviews_after_the_final_stage() -> None:
-    session = PrototypeSession.start(_game(), _next_game)
+    session = PrototypeSession.start(_game(), _next_game, "expert")
 
     with pytest.raises(GameplayError, match="no completed stage"):
         session.continue_stage()
@@ -548,7 +551,11 @@ def media_library(tmp_path):
 @pytest.fixture
 def server(media_library):
     httpd = serve(
-        _game(), next_game=_next_game, media_library=media_library, port=0
+        _game(),
+        next_game=_next_game,
+        media_library=media_library,
+        difficulty="expert",
+        port=0,
     )
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
@@ -594,6 +601,7 @@ def test_serves_the_page_and_the_view(server: str) -> None:
     # The column adapter must preserve anonymous slots for vertical layout.
     assert b"slotCount: Number.isInteger(tier.slot_count)" in page
     assert b"length: tier.slotCount" in page
+    assert b'data-difficulty="normal" aria-pressed="true"' in page
     assert b"setTimeout(refreshMedia, 1000)" in page
     assert b'const SLOT_HINTS = { mulligan: "+1", unlock: "guess me" }' in page
     assert b"if (labelled && tier.slotRole)" in page
@@ -602,6 +610,8 @@ def test_serves_the_page_and_the_view(server: str) -> None:
     assert b'"target clade", "unknown"' in page
     assert b"hidden continuation" not in page
     assert b"You've attained the title:" in page
+    assert b'className = "attained-title"' in page
+    assert b"#feedback .attained-title" in page
 
     status, body = _get(server, "/api/view")
     assert status == 200
@@ -695,11 +705,11 @@ def test_resolves_guesses_over_http(server: str) -> None:
 
 
 def test_switches_difficulty_over_http(server: str) -> None:
-    status, payload = _post(server, "/api/difficulty", {"difficulty": "guided"})
+    status, payload = _post(server, "/api/difficulty", {"difficulty": "normal"})
 
     assert status == 200
     view = payload["view"]
-    assert view["difficulty"] == "guided"
+    assert view["difficulty"] == "normal"
     assert view["target"]["species_id"] == TARGET
     assert [card["species_id"] for card in view["cards"]] == [DECOY_A, UNLOCK]
 
@@ -744,6 +754,7 @@ def test_command_line_allows_a_random_target_or_one_explicit_source() -> None:
     assert parser.parse_args(["--target", "5"]).target == 5
     random_args = parser.parse_args([])
     assert random_args.target is None and random_args.game is None
+    assert random_args.difficulty == "normal"
     download_args = parser.parse_args(
         ["--download-missing-images", "--media-transport", "curl"]
     )
@@ -885,11 +896,12 @@ def test_startup_summary_does_not_disclose_the_target() -> None:
 
     assert "target" not in summary
     assert "seed 7" in summary
+    assert summary.endswith("normal")
 
 
 def test_reports_divergence_ages_on_placed_tiers() -> None:
     game = _game()
-    state, _ = replay(game, [MULLIGAN_A, UNLOCK])
+    state, _ = replay(game, [MULLIGAN_A, UNLOCK], "expert")
 
     tiers = build_view(game, state)["lineage"][0]["tiers"]
 
@@ -905,7 +917,7 @@ def test_reports_divergence_ages_on_placed_tiers() -> None:
 
 def test_dates_an_empty_branching_event_without_naming_it() -> None:
     game = _game()
-    state, _ = replay(game, [DECOY_A])
+    state, _ = replay(game, [DECOY_A], "expert")
 
     tiers = build_view(game, state)["lineage"][0]["tiers"]
 
@@ -918,7 +930,7 @@ def test_dates_an_empty_branching_event_without_naming_it() -> None:
 
 def test_reports_clade_names_on_placed_tiers() -> None:
     game = _game()
-    state, _ = replay(game, [MULLIGAN_A, UNLOCK])
+    state, _ = replay(game, [MULLIGAN_A, UNLOCK], "expert")
 
     tiers = build_view(game, state)["lineage"][0]["tiers"]
 
@@ -1020,7 +1032,7 @@ def test_a_completed_game_reveals_its_target_under_expert_play(
     description_library,
 ) -> None:
     game = _game()
-    state, _ = replay(game, [UNLOCK, TARGET])
+    state, _ = replay(game, [UNLOCK, TARGET], "expert")
     assert state.completed
 
     view = build_view(game, state, descriptions=description_library)
@@ -1036,8 +1048,8 @@ def test_a_completed_game_reveals_its_target_under_expert_play(
 def test_an_unfinished_expert_game_still_withholds_its_target() -> None:
     game = _game()
 
-    assert build_view(game, initial_state(game))["target"] is None
-    state, _ = replay(game, [UNLOCK])
+    assert build_view(game, initial_state(game, "expert"))["target"] is None
+    state, _ = replay(game, [UNLOCK], "expert")
     assert build_view(game, state)["target"] is None
 
 
